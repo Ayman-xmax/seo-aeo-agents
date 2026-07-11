@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from statistics import mean
 from typing import Any
+from urllib.parse import urlparse
 
 from google.adk.tools.tool_context import ToolContext
 
@@ -138,15 +139,38 @@ def _score_content_keyword(sig: dict[str, list[dict]]) -> tuple[float | None, di
         "Keyword-map matching remains a qualitative check in the keyword report."]
 
 
-def _score_off_page(sig: dict[str, list[dict]]) -> tuple[float | None, dict, list[str]]:
-    """Off-page authority from OUR OWN PageRank score (local link graph, no paid API)."""
-    da = [s for s in sig.get("domain_authority", [])
-          if isinstance(s, dict) and s.get("status") == "success"
-          and s.get("authority_0_100") is not None]
-    scores = [float(s["authority_0_100"]) for s in da]
+def _target_domain(state) -> str:
+    brief = state.get(config.S.PROJECT_BRIEF) or {}
+    net = urlparse(brief.get("target_url", "")).netloc.lower()
+    return net[4:] if net.startswith("www.") else net
+
+
+def _score_off_page(sig, state) -> tuple[float | None, dict, list[str]]:
+    """Off-page authority from OUR OWN PageRank score (local link graph, no paid API).
+
+    Reads the target's authority straight from the owned index (where bootstrap_authority
+    /seed_index/compute_authority store it), which is more reliable than harvesting the
+    MCP tool response. Falls back to any harvested domain_authority signals.
+    """
+    scores: list[float] = []
+    dom = _target_domain(state)
+    if dom:
+        try:
+            from seo_data_mcp import store as _store
+
+            rec = _store.get_authority(dom)
+            if rec and rec.get("score") is not None:
+                scores.append(float(rec["score"]))
+        except Exception:
+            pass
+    for s in sig.get("domain_authority", []):
+        if isinstance(s, dict) and s.get("authority_0_100") is not None:
+            scores.append(float(s["authority_0_100"]))
+
     if not scores:
-        return None, {}, ["Off-page authority needs our link graph: run crawl_links over "
-                          "the target + niche pages, then compute_authority. No paid API."]
+        return None, {}, ["Off-page authority needs the link graph built: the backlink "
+                          "agent's bootstrap_authority crawls the target + niche pages and "
+                          "runs local PageRank. No paid API."]
     val = round(mean(scores), 1)
     return val, {"domain_authority_0_100": val}, [
         "Authority = PageRank over our own crawled link graph (log-normalized 0-100), "
@@ -168,7 +192,7 @@ def compute_health_score(label: str, tool_context: ToolContext) -> dict:
         "technical": _score_technical(sig),
         "on_page": _score_on_page(sig),
         "content_keyword": _score_content_keyword(sig),
-        "off_page": _score_off_page(sig),
+        "off_page": _score_off_page(sig, state),
         "aeo_geo": _score_aeo(sig),
     }
 
