@@ -51,6 +51,7 @@ def build_phase1_diagnose() -> SequentialAgent:
             sa.create_strategy_synthesizer(),
             sa.create_aeo_specialist(),
             sa.create_scorer("baseline"),
+            sa.create_action_plan(),  # last: present the plan for approval / refocus
         ],
     )
 

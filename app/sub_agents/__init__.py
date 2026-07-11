@@ -19,12 +19,14 @@ from .execution import (
     create_verifier,
 )
 from .strategy import (
+    create_action_plan,
     create_content_optimizer,
     create_critic,
     create_strategy_synthesizer,
 )
 
 __all__ = [
+    "create_action_plan",
     "create_aeo_specialist",
     "create_backlink",
     "create_competitor_discovery",

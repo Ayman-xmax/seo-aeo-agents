@@ -70,6 +70,42 @@ def create_strategy_synthesizer() -> LlmAgent:
     )
 
 
+def create_action_plan() -> LlmAgent:
+    """Final Phase-1 step: present a clear, approvable action plan to the user."""
+    return LlmAgent(
+        name="action_plan",
+        model=build_model(SYNTH_MODEL),
+        description="Presents the Phase-1 action plan for the user to approve or refocus.",
+        instruction=contract(
+            role="Present the final Phase 1 ACTION PLAN in plain language so the user can "
+            "approve it or choose a section to focus on first. This is the last thing they "
+            "see in Phase 1.",
+            must=[
+                "Open with 2-3 sentences: what the site is (the niche you inferred), its "
+                "overall Health Score, and the 2-3 biggest opportunities.",
+                "Then a prioritized ACTION PLAN grouped by section — Technical, On-Page, "
+                "Content, Off-Page, AEO. For each action give: WHAT you'll change, HOW "
+                "you'll do it (the method), Priority (High/Med/Low), and Expected impact.",
+                "Order sections by where the score is weakest / impact is highest.",
+                "END with exactly this ask: 'Reply approve to implement the full plan, or "
+                "tell me a section to focus on first (Technical / On-Page / Content / "
+                "Off-Page / AEO).'",
+            ],
+            must_not=[
+                "Introduce actions not supported by the findings/roadmap.",
+                "Start implementing anything — Phase 1 is read-only.",
+                "Dump raw JSON; write it for a human.",
+            ],
+            if_unsure="Present what the reports support and note any gaps honestly.",
+            skill_name="action_plan",
+            extra="ROADMAP:\n{strategy?}\n\nBASELINE SCORE:\n{scorecard_baseline?}\n\n"
+            "AEO:\n{aeo_report?}\n\nCOMPETITORS:\n{competitor_report?}",
+        ),
+        before_tool_callback=governance_before_tool,
+        output_key="action_plan",
+    )
+
+
 def create_content_optimizer() -> LlmAgent:
     return LlmAgent(
         name="content_optimizer",
@@ -81,6 +117,8 @@ def create_content_optimizer() -> LlmAgent:
             "answer blocks, schema).",
             must=[
                 "Work only from the roadmap in state['strategy'].",
+                "If state['focus_section'] is set (and not 'all'), draft ONLY that section's "
+                "items first; note the rest are deferred.",
                 "Produce exact proposed values per target URL/field — do not apply them.",
                 "Use retrieve_knowledge to follow current best practice and cite it.",
                 "Respect pixel-aware title/meta length guidance.",
@@ -91,7 +129,8 @@ def create_content_optimizer() -> LlmAgent:
             ],
             if_unsure="Flag the item as needing human input rather than guessing content.",
             skill_name="content_optimizer",
-            extra="ROADMAP:\n{strategy?}\n\nPRIOR CRITIQUE (if any):\n{critique?}",
+            extra="FOCUS SECTION (if any):\n{focus_section?}\n\nROADMAP:\n{strategy?}\n\n"
+            "PRIOR CRITIQUE (if any):\n{critique?}",
         ),
         tools=[retrieve_knowledge],
         before_tool_callback=governance_before_tool,

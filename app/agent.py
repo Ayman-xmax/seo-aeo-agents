@@ -69,6 +69,16 @@ def set_phase(phase: str, tool_context: ToolContext) -> dict:
     return {"status": "ok", "phase": phase}
 
 
+def set_focus(section: str, tool_context: ToolContext) -> dict:
+    """Record which section to prioritize in Phase 2. Call when the user picks one.
+
+    Args:
+        section: e.g. 'technical', 'on_page', 'content', 'off_page', 'aeo', or 'all'.
+    """
+    tool_context.state["focus_section"] = section
+    return {"status": "ok", "focus_section": section}
+
+
 def approve_publish(approved: bool, tool_context: ToolContext) -> dict:
     """Set the human publish-approval gate. Call ONLY on explicit user approval.
 
@@ -95,10 +105,11 @@ root_agent = LlmAgent(
             "you understood the site to be, so they can correct you.",
             "Explain the plan simply. Phase 1 (diagnose) is read-only and safe; run it "
             "by transferring to phase1_diagnose after set_phase('diagnose').",
-            "After Phase 1, present the baseline score + roadmap and STOP for approval.",
-            "Only when the user approves implementation: call set_phase('implement'), "
-            "and if they approve going live, approve_publish(true), then transfer to "
-            "phase2_implement.",
+            "Phase 1 ends by showing the user an ACTION PLAN. STOP and wait for their reply.",
+            "When the user replies: if they name a section to focus on first, call "
+            "set_focus(section). When they approve implementing, call set_phase('implement') "
+            "(and approve_publish(true) only if they also approve applying changes to the "
+            "site), then transfer to phase2_implement.",
             "After implementation, call set_phase('verify') and transfer to "
             "phase3_verify to produce the before/after report.",
             "Keep the user in plain language; no SEO jargon dumps.",
@@ -111,8 +122,8 @@ root_agent = LlmAgent(
         if_unsure="Ask the user a short clarifying question rather than assuming.",
         skill_name="root_agent",
     ),
-    tools=[fetch_site_overview, set_project_brief, set_phase, approve_publish,
-           semrush_status],
+    tools=[fetch_site_overview, set_project_brief, set_phase, set_focus,
+           approve_publish, semrush_status],
     sub_agents=[
         build_phase1_diagnose(),
         build_phase2_implement(),
