@@ -152,34 +152,37 @@ def _score_off_page(sig, state) -> tuple[float | None, dict, list[str]]:
     /seed_index/compute_authority store it), which is more reliable than harvesting the
     MCP tool response. Falls back to any harvested domain_authority signals.
     """
-    scores: list[float] = []
     dom = _target_domain(state)
-    if dom:
-        try:
-            from seo_data_mcp import authority as _auth
-            from seo_data_mcp import store as _store
+    if not dom:
+        return None, {}, ["No target URL in the project brief to score off-page for."]
 
-            rec = _store.get_authority(dom)
-            if not rec and _store.all_edges():
-                # Graph has edges (from the crawl) but wasn't scored — compute now.
-                _auth.compute_pagerank()
-                rec = _store.get_authority(dom)
-            if rec and rec.get("score") is not None:
-                scores.append(float(rec["score"]))
-        except Exception:
-            pass
-    for s in sig.get("domain_authority", []):
-        if isinstance(s, dict) and s.get("authority_0_100") is not None:
-            scores.append(float(s["authority_0_100"]))
+    rec, refs = None, []
+    try:
+        from seo_data_mcp import authority as _auth
+        from seo_data_mcp import store as _store
 
-    if not scores:
-        return None, {}, ["Off-page authority needs the link graph built: the backlink "
-                          "agent's bootstrap_authority crawls the target + niche pages and "
-                          "runs local PageRank. No paid API."]
-    val = round(mean(scores), 1)
-    return val, {"domain_authority_0_100": val}, [
-        "Authority = PageRank over our own crawled link graph (log-normalized 0-100), "
-        "the same mechanism as DR/AS but computed locally."]
+        if not _store.get_authority(dom) and _store.all_edges():
+            _auth.compute_pagerank()  # score the graph if it wasn't computed yet
+        rec = _store.get_authority(dom)
+        refs = _store.referring_domains(dom, 5000)
+    except Exception:
+        pass
+
+    if rec and rec.get("score") is not None:
+        val = round(float(rec["score"]), 1)
+        return val, {"domain_authority_0_100": val,
+                     "referring_domains_found": len(refs)}, [
+            "PageRank authority over our own crawled link graph (log-normalized 0-100), "
+            "the same mechanism as DR/AS but computed locally."]
+
+    # Target isn't in the crawled graph = no inbound links discovered. Honest low floor
+    # (NOT 'insufficient') — authority is real but undiscovered until we crawl who links here.
+    return 15.0, {"referring_domains_found": 0}, [
+        "MINIMAL/undiscovered off-page authority: no inbound links to this domain were "
+        "found in the crawled graph (common for a site whose backlinks we haven't crawled "
+        "— most sites link only internally). Run seed_common_crawl (free Common Crawl, the "
+        "whole web's link graph) for a real web-scale authority number; the score rises as "
+        "inbound links are discovered."]
 
 
 def compute_health_score(label: str, tool_context: ToolContext) -> dict:

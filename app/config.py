@@ -29,8 +29,9 @@ LLM_PROVIDER = os.environ.get("SEO_LLM_PROVIDER", "google").lower()
 _MODEL_DEFAULTS = {
     "google": {"router": "gemini-flash-latest", "worker": "gemini-flash-latest",
                "synth": "gemini-flash-latest"},
+    # gpt-4o-mini everywhere: high TPM (avoids gpt-4o's low 30k/min tier cap) + cheap.
     "openai": {"router": "openai/gpt-4o-mini", "worker": "openai/gpt-4o-mini",
-               "synth": "openai/gpt-4o"},
+               "synth": "openai/gpt-4o-mini"},
 }
 _d = _MODEL_DEFAULTS.get(LLM_PROVIDER, _MODEL_DEFAULTS["google"])
 
