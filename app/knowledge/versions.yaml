@@ -1,0 +1,24 @@
+# Curated SEO/AEO knowledge corpus — provenance & versioning.
+# When Google changes a rule, update the source doc + bump last_updated here, then
+# re-run:  uv run python -m app.knowledge_base.ingest
+# Best practices go stale (e.g. FAQ rich results were deprecated) — this file is the
+# audit trail for what the RAG layer currently believes.
+
+corpus:
+  - file: 00_google_crawlable_links.md
+    source_url: https://developers.google.com/search/docs/crawling-indexing/links-crawlable
+    tier: official_google
+    last_updated: 2026-07-10
+    status: seeded
+  - file: 10_seo_process.md
+    source: internal_research_synthesis
+    tier: synthesis
+    last_updated: 2026-07-10
+    status: seeded
+  - file: 20_aeo_geo.md
+    source: internal_research_synthesis
+    tier: synthesis
+    last_updated: 2026-07-10
+    status: seeded
+
+# Tiers (confidence for grounding): official_google > web_dev > reputable_vendor > synthesis
