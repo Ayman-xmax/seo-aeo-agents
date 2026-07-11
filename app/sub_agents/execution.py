@@ -30,6 +30,7 @@ from ..tools import (
     publish_change,
     push_changes,
     query_organic,
+    replace_in_repo,
     search_analytics,
     write_robots,
 )
@@ -75,10 +76,16 @@ def create_implementation() -> LlmAgent:
             must=[
                 "Only apply approved items; the write tools are blocked until "
                 "state['publish_approved'] is True.",
-                "Use the right tool per change: publish_change(target, field, value) for "
-                "seo_title/meta_description/canonical/schema_jsonld/h1/content_append; "
-                "generate_sitemap(base_url) for the sitemap; write_robots(sitemap_url) to "
-                "declare it; create_page(...) for new content-brief pages.",
+                "To CHANGE an existing value (title, meta, H1, any copy), PREFER "
+                "replace_in_repo(current_text, new_text) — it edits the value wherever it "
+                "lives (HTML, React/Astro/Vue component, Hugo/Jekyll template, config), not "
+                "just static HTML. Use the exact current value from the action plan.",
+                "If replace_in_repo returns 'not_found', the value is build-generated or "
+                "from a CMS — record it to the change-set (publish_change) and tell the user "
+                "which file/component to edit.",
+                "For ADDING things: create_page(...) for new pages; generate_sitemap(base_url) "
+                "+ write_robots(sitemap_url) for the sitemap; publish_change for schema/meta "
+                "insertion in static HTML.",
                 "Apply exactly the values from the approved action plan / draft — verbatim.",
                 "If a repo was cloned (state has site_repo_path): changes are written to the "
                 "real files (result 'applied_to_file') on the 'seo-agent-optimizations' "
@@ -105,8 +112,8 @@ def create_implementation() -> LlmAgent:
             skill_name="implementation",
             extra="APPROVED DRAFT:\n{draft_changes?}",
         ),
-        tools=[publish_change, generate_sitemap, write_robots, create_page,
-               commit_changes, push_changes, inspect_url],
+        tools=[replace_in_repo, publish_change, generate_sitemap, write_robots,
+               create_page, commit_changes, push_changes, inspect_url],
         before_tool_callback=governance_before_tool,
         disallow_transfer_to_peers=True,
         output_key=S.CHANGE_LOG,

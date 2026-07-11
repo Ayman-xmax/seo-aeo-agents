@@ -93,7 +93,8 @@ COLLECTORS_MODE = os.environ.get("SEO_COLLECTORS_MODE", "parallel").lower()
 # Tools that mutate the live site — blocked outside the implement phase AND require
 # explicit human approval (state['publish_approved']).
 WRITE_TOOL_NAMES = {"publish_change", "apply_seo_changes", "generate_sitemap",
-                    "write_robots", "create_page", "commit_changes", "push_changes"}
+                    "write_robots", "create_page", "commit_changes", "push_changes",
+                    "replace_in_repo"}
 CMS_PUBLISH_TOOL_NAMES = set(WRITE_TOOL_NAMES)
 
 # --------------------------------------------------------------------------- #
