@@ -140,6 +140,7 @@ _HARVEST_TOOLS = {
     "get_crux",
     "run_pagespeed",
     "inspect_url",
+    "domain_authority",  # free Open PageRank -> feeds off-page score
 }
 
 

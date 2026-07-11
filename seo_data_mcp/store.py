@@ -36,9 +36,45 @@ def connect() -> sqlite3.Connection:
         CREATE TABLE IF NOT EXISTS authority (
             domain TEXT PRIMARY KEY, score REAL, rank INTEGER, updated TEXT
         );
+        CREATE TABLE IF NOT EXISTS edges (
+            src TEXT, dst TEXT, first_seen TEXT, PRIMARY KEY (src, dst)
+        );
+        CREATE INDEX IF NOT EXISTS idx_edges_dst ON edges(dst);
         """
     )
     return conn
+
+
+def add_edges(src: str, dsts: list[str]) -> int:
+    """Record src-domain -> dst-domain hyperlinks in our owned link graph."""
+    dsts = [d for d in {d.strip() for d in dsts} if d and d != src]
+    if not src or not dsts:
+        return 0
+    conn = connect()
+    with conn:
+        conn.executemany(
+            "INSERT OR IGNORE INTO edges(src, dst, first_seen) VALUES (?,?,?)",
+            [(src, d, _now()) for d in dsts],
+        )
+    conn.close()
+    return len(dsts)
+
+
+def all_edges() -> list[tuple[str, str]]:
+    conn = connect()
+    rows = conn.execute("SELECT src, dst FROM edges").fetchall()
+    conn.close()
+    return rows
+
+
+def referring_domains(domain: str, limit: int) -> list[str]:
+    """Domains that link TO `domain` = the backlinks we've discovered (incoming edges)."""
+    conn = connect()
+    rows = conn.execute(
+        "SELECT DISTINCT src FROM edges WHERE dst=? LIMIT ?", (domain, limit)
+    ).fetchall()
+    conn.close()
+    return [r[0] for r in rows]
 
 
 def upsert_keywords(keywords: list[str], market: str, source: str) -> int:
@@ -111,6 +147,7 @@ def stats() -> dict:
     kw = conn.execute("SELECT COUNT(*) FROM keywords").fetchone()[0]
     serp = conn.execute("SELECT COUNT(*) FROM serp").fetchone()[0]
     dom = conn.execute("SELECT COUNT(*) FROM authority").fetchone()[0]
+    edges = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
     conn.close()
     return {"keywords_indexed": kw, "serp_rows": serp, "domains_scored": dom,
-            "db_path": _DB_PATH}
+            "link_edges": edges, "db_path": _DB_PATH}

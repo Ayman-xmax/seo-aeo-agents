@@ -7,11 +7,13 @@ Profile the target's backlinks and find the highest-value link gaps vs competito
 1. semrush_status. If configured: backlink_research on the target (referring domains, DR
    distribution, dofollow ratio, anchor profile, new vs lost), then the gap vs competitors
    (links ALL competitors have, dofollow only, min DR 50, min ~1,000 monthly traffic).
-2. FREE FALLBACK (backlinks have no free index): if no paid source, use retrieve_knowledge
-   to build a grounded authority/link-building STRATEGY — digital PR, unlinked-mention
-   reclamation, brand mentions, HARO/Featured, broken-link building — and cite it. Label it
-   clearly as strategy, NOT live backlink data.
-3. Surface top opportunities and any toxic-link risks (for disavow) when data exists.
+2. OWNED PATH (no paid API, no fee): crawl_links on the target + a few competitor/niche
+   pages to build our link graph -> compute_authority (local PageRank) -> domain_authority
+   (0-100, our own score) + referring_domains (backlinks we discovered). Same mechanism as
+   DR/AS, computed locally. Coverage grows the more you crawl.
+3. Also use retrieve_knowledge for a grounded authority/link-building STRATEGY (digital PR,
+   unlinked-mention reclamation, brand mentions, HARO/Featured). Label strategy vs data.
+4. Surface top opportunities and any toxic-link risks (for disavow) when data exists.
 
 ## Quality bar
 - Authority scores (DR/DA/AS) reported as RELATIVE proxies, never ground truth; never

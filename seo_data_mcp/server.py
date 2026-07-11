@@ -21,12 +21,13 @@ from __future__ import annotations
 
 import os
 from statistics import mean
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import requests
+from bs4 import BeautifulSoup
 from mcp.server.fastmcp import FastMCP
 
-from . import store
+from . import authority, store
 
 mcp = FastMCP("seo-data")
 
@@ -34,6 +35,21 @@ mcp = FastMCP("seo-data")
 def _domain_of(url: str) -> str:
     net = urlparse(url).netloc.lower()
     return net[4:] if net.startswith("www.") else net
+
+
+def _outbound_domains(url: str) -> tuple[str, set[str]]:
+    """Fetch a page and return (its domain, set of external domains it links to)."""
+    r = requests.get(url, headers={"User-Agent": _UA}, timeout=15)
+    src = _domain_of(r.url)
+    soup = BeautifulSoup(r.text, "lxml")
+    dsts: set[str] = set()
+    for a in soup.find_all("a", href=True):
+        full = urljoin(r.url, a["href"])
+        if full.startswith("http"):
+            d = _domain_of(full)
+            if d and d != src:
+                dsts.add(d)
+    return src, dsts
 
 _UA = "Mozilla/5.0 (compatible; SEO-AEO-Agent/1.0)"
 _SUGGEST = "https://suggestqueries.google.com/complete/search"
@@ -152,35 +168,70 @@ def serp_competitors(query: str, market: str = "us") -> dict:
 
 
 @mcp.tool()
-def domain_authority(domain: str) -> dict:
-    """Domain authority for a domain (FREE, Open PageRank — Common-Crawl based).
+def crawl_links(url: str) -> dict:
+    """Crawl one page and record its outbound domain links into our OWN link graph.
 
-    0-10 score + global rank, cached in our owned index. This is our free stand-in
-    for Semrush/Ahrefs authority. Set OPENPAGERANK_API_KEY (free) to enable.
+    This is how we build the graph that authority is computed from — no third-party
+    data. Crawl the target site + competitors + niche pages (e.g. serp_lookup URLs),
+    then call compute_authority.
+
+    Args:
+        url: The page URL to crawl for outbound links.
+    """
+    try:
+        src, dsts = _outbound_domains(url)
+        added = store.add_edges(src, list(dsts))
+        return {"status": "success", "source_domain": src,
+                "outbound_domains": len(dsts), "edges_added": added,
+                "sample": sorted(dsts)[:20]}
+    except Exception as e:
+        return {"status": "unavailable", "reason": f"crawl failed: {e}"}
+
+
+@mcp.tool()
+def compute_authority() -> dict:
+    """Run PageRank over our crawled link graph -> 0-100 authority for every domain.
+
+    Same mechanism as Ahrefs DR / Semrush AS / Open PageRank, but computed locally on
+    our own graph. Run after crawling; re-run as the graph grows.
+    """
+    return authority.compute_pagerank()
+
+
+@mcp.tool()
+def domain_authority(domain: str) -> dict:
+    """OUR computed domain authority (0-100), from local PageRank — no paid API.
+
+    Reads the score produced by compute_authority. If the domain isn't in our graph
+    yet, crawl pages that link to it, then compute_authority.
 
     Args:
         domain: Bare domain, e.g. 'example.com'.
     """
-    key = os.environ.get("OPENPAGERANK_API_KEY")
-    if not key:
-        return {"status": "not_configured",
-                "reason": "Set OPENPAGERANK_API_KEY (free at openpagerank.com) to enable "
-                "authority scores without a paid tool."}
-    try:
-        r = requests.get("https://openpagerank.com/api/v1.0/getPageRank",
-                         params=[("domains[]", domain)], headers={"API-OPR": key},
-                         timeout=15)
-        item = (r.json().get("response") or [{}])[0]
-        score = item.get("page_rank_decimal")
-        rank = item.get("rank")
-        if score is None:
-            return {"status": "unavailable", "domain": domain,
-                    "reason": "No authority data for this domain."}
-        store.upsert_authority(domain, float(score), int(rank or 0))
-        return {"status": "success", "domain": domain, "authority_0_10": score,
-                "global_rank": rank, "source": "open_pagerank"}
-    except Exception as e:
-        return {"status": "unavailable", "reason": f"Open PageRank call failed: {e}"}
+    rec = store.get_authority(domain)
+    if not rec:
+        return {"status": "not_in_graph", "domain": domain,
+                "reason": "Domain not scored yet. crawl_links on pages in its niche "
+                "(and the domain itself), then compute_authority."}
+    return {"status": "success", "domain": domain,
+            "authority_0_100": rec["score"], "graph_rank": rec["rank"],
+            "source": "local_pagerank",
+            "referring_domains_known": len(store.referring_domains(domain, 1000))}
+
+
+@mcp.tool()
+def referring_domains(domain: str, limit: int = 100) -> dict:
+    """Domains that link TO `domain` in our crawled graph = discovered backlinks.
+
+    Args:
+        domain: Bare domain to look up backlinks for.
+        limit: Max referring domains to return.
+    """
+    refs = store.referring_domains(domain, limit)
+    return {"status": "success", "domain": domain, "referring_domains_count": len(refs),
+            "referring_domains": refs,
+            "note": "Backlinks discovered by our own crawl; coverage grows as you crawl "
+            "more of the niche."}
 
 
 @mcp.tool()

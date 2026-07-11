@@ -110,6 +110,21 @@ def _score_aeo(sig: dict[str, list[dict]]) -> tuple[float | None, dict, list[str
     return round(val, 1), detail, notes
 
 
+def _score_off_page(sig: dict[str, list[dict]]) -> tuple[float | None, dict, list[str]]:
+    """Off-page authority from OUR OWN PageRank score (local link graph, no paid API)."""
+    da = [s for s in sig.get("domain_authority", [])
+          if isinstance(s, dict) and s.get("status") == "success"
+          and s.get("authority_0_100") is not None]
+    scores = [float(s["authority_0_100"]) for s in da]
+    if not scores:
+        return None, {}, ["Off-page authority needs our link graph: run crawl_links over "
+                          "the target + niche pages, then compute_authority. No paid API."]
+    val = round(mean(scores), 1)
+    return val, {"domain_authority_0_100": val}, [
+        "Authority = PageRank over our own crawled link graph (log-normalized 0-100), "
+        "the same mechanism as DR/AS but computed locally."]
+
+
 def compute_health_score(label: str, tool_context: ToolContext) -> dict:
     """Compute the deterministic SEO/AEO Health Score from captured signals.
 
@@ -124,10 +139,11 @@ def compute_health_score(label: str, tool_context: ToolContext) -> dict:
     scorers = {
         "technical": _score_technical(sig),
         "on_page": _score_on_page(sig),
-        "content_keyword": (None, {}, ["Deterministic scoring pending structured "
-                                        "keyword/gap signals from Semrush MCP."]),
-        "off_page": (None, {}, ["Deterministic scoring pending structured backlink "
-                                 "signals from Semrush MCP."]),
+        "content_keyword": (None, {}, ["Content/keyword coverage is produced by the "
+                                        "keyword agent as a qualitative map (free "
+                                        "autocomplete ideas). Exact volumes need Google "
+                                        "Ads Keyword Planner (free account)."]),
+        "off_page": _score_off_page(sig),
         "aeo_geo": _score_aeo(sig),
     }
 
