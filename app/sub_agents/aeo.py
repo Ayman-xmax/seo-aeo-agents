@@ -9,10 +9,14 @@ from google.adk.agents import LlmAgent
 from ..config import SYNTH_MODEL, S, build_model
 from ..guardrails import contract, governance_before_tool
 from ..tools import retrieve_knowledge
+from ..tools.local_seo_mcp import build_local_seo_mcp
 
 
 def create_aeo_specialist() -> LlmAgent:
-    # RAG-grounded (no google_search here — it's isolated in serp_aeo).
+    # RAG-grounded (no google_search here — it's isolated in serp_aeo). The free
+    # keyword MCP supplies REAL question-form queries to build answer blocks around.
+    local = build_local_seo_mcp()
+    tools = [retrieve_knowledge] + ([local] if local else [])
     return LlmAgent(
         name="aeo_specialist",
         model=build_model(SYNTH_MODEL),
@@ -21,6 +25,9 @@ def create_aeo_specialist() -> LlmAgent:
             role="Produce AEO/GEO recommendations so the site gets cited in AI "
             "Overviews, Perplexity, ChatGPT, and Gemini answers.",
             must=[
+                "FREE PATH: use question_keywords (and keyword_ideas) to discover the "
+                "REAL questions people ask in this niche — these are your answer-block "
+                "targets. Do not invent questions.",
                 "Apply the validated citation levers: answer-first 40-60 word blocks, "
                 "question-shaped headings, cited statistics and quotations, entity/"
                 "schema clarity, authoritative fluent voice.",
@@ -40,7 +47,7 @@ def create_aeo_specialist() -> LlmAgent:
             skill_name="aeo_specialist",
             extra="SERP/AEO OBSERVATIONS:\n{serp_report?}\n\nSTRATEGY:\n{strategy?}",
         ),
-        tools=[retrieve_knowledge],
+        tools=tools,
         before_tool_callback=governance_before_tool,
         output_key=S.AEO_REPORT,
     )

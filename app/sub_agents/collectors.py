@@ -23,6 +23,7 @@ from ..tools import (
     check_robots_and_sitemap,
     get_crux,
     inspect_url,
+    retrieve_knowledge,
     run_pagespeed,
     semrush_status,
 )
@@ -138,23 +139,31 @@ def create_keyword_research() -> LlmAgent:
 
 def create_backlink() -> LlmAgent:
     semrush = build_semrush_toolset(["backlink_research", "overview_research"])
-    tools = [semrush_status] + ([semrush] if semrush else [])
+    tools = [semrush_status, retrieve_knowledge] + ([semrush] if semrush else [])
     return _leaf(
         name="backlink",
         model=build_model(WORKER_MODEL),
-        description="Analyzes the backlink profile and the backlink gap vs competitors.",
+        description="Analyzes backlinks/gap (if a paid index is set) or gives a grounded "
+        "authority-building strategy (free) otherwise.",
         instruction=contract(
-            role="Analyze the target's backlink profile and the gap vs competitors.",
+            role="Analyze the target's backlink profile and gap vs competitors when a "
+            "paid link index is available; otherwise produce a grounded authority plan.",
             must=[
-                "Use Semrush backlink tools; apply quality filters (DR>=50, dofollow, "
+                "If Semrush is configured: profile backlinks + gap (DR>=50, dofollow, "
                 "min 1,000 monthly traffic, links all competitors have).",
+                "FREE FALLBACK (no paid link index exists for backlinks): use "
+                "retrieve_knowledge to produce a grounded authority/link-building STRATEGY "
+                "— digital PR, unlinked-mention reclamation, brand mentions, HARO/Featured "
+                "— and cite the guidance.",
                 "Treat authority scores (DR/DA/AS) as relative proxies, never ground truth.",
             ],
             must_not=[
                 "Invent referring domains or authority numbers.",
+                "Present strategy as if it were live backlink data.",
                 "Recommend buying links or any manipulative tactic.",
             ],
-            if_unsure="State that backlink data is unavailable.",
+            if_unsure="Give best-practice authority strategy from the knowledge base and "
+            "state clearly that live backlink data needs a paid source.",
             skill_name="backlink",
         ),
         tools=tools,
