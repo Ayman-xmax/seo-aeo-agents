@@ -89,7 +89,9 @@ def create_technical_audit() -> LlmAgent:
                 "For each page: call audit_technical_basics, audit_links, and "
                 "audit_content; run check_robots_and_sitemap once for the site.",
                 "Use get_crux/run_pagespeed for Core Web Vitals where possible.",
-                "Report each issue with the exact tool field it came from (evidence).",
+                "Report each issue with the exact tool field it came from (evidence), AND "
+                "include the exact CURRENT title and meta description text per page (from "
+                "audit_technical_basics) so changes can be specified as current -> new.",
                 "Apply the crawlable-link rules literally: flag non-anchor href, "
                 "onclick-only, javascript: hrefs, generic/stuffed anchors, missing "
                 "alt/title, chained links, and >150 links/page.",

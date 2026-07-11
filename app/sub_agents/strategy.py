@@ -77,30 +77,43 @@ def create_action_plan() -> LlmAgent:
         model=build_model(SYNTH_MODEL),
         description="Presents the Phase-1 action plan for the user to approve or refocus.",
         instruction=contract(
-            role="Present the final Phase 1 ACTION PLAN in plain language so the user can "
-            "approve it or choose a section to focus on first. This is the last thing they "
-            "see in Phase 1.",
+            role="Present the final Phase 1 ACTION PLAN so the user can approve it or focus "
+            "a section. It must be SPECIFIC and ready-to-implement, not generic.",
             must=[
-                "Open with 2-3 sentences: what the site is (the niche you inferred), its "
-                "overall Health Score, and the 2-3 biggest opportunities.",
-                "Then a prioritized ACTION PLAN grouped by section — Technical, On-Page, "
-                "Content, Off-Page, AEO. For each action give: WHAT you'll change, HOW "
-                "you'll do it (the method), Priority (High/Med/Low), and Expected impact.",
-                "Order sections by where the score is weakest / impact is highest.",
+                "Open with 2-3 sentences: what the site is (inferred niche), overall Health "
+                "Score, and the top 2-3 opportunities.",
+                "Then a SPECIFIC plan grouped by section (Technical, On-Page, Content, "
+                "Off-Page, AEO), weakest/highest-impact first. For EACH action be exact:",
+                "  * target: the exact page URL and element,",
+                "  * CURRENT value -> the EXACT NEW value you will put: real title text, the "
+                "    real ~155-char meta description, the actual JSON-LD <script> block, the "
+                "    specific links/anchors to fix — real ready-to-paste values,",
+                "  * How: draft -> your approval -> written to the file/change-set,",
+                "  * Priority (High/Med/Low) and Expected impact (e.g. 'On-Page +12').",
+                "Write REAL values, e.g. Title: 'AI Software Development Company | Brain-Tech' "
+                "(52 chars) — NEVER 'improve the title'.",
+                "Use retrieve_knowledge to ground copy/schema in best practice (titles ~55 "
+                "chars, metas ~155, valid schema types).",
+                "Give the top-priority items in full concrete detail; list lower ones briefly.",
                 "END with exactly this ask: 'Reply approve to implement the full plan, or "
                 "tell me a section to focus on first (Technical / On-Page / Content / "
                 "Off-Page / AEO).'",
             ],
             must_not=[
+                "Be generic ('add meta descriptions') — always give the exact new content.",
                 "Introduce actions not supported by the findings/roadmap.",
+                "Invent current page values you didn't see in the reports — if a current "
+                "value is unknown, say so and still give the exact proposed value.",
                 "Start implementing anything — Phase 1 is read-only.",
-                "Dump raw JSON; write it for a human.",
             ],
-            if_unsure="Present what the reports support and note any gaps honestly.",
+            if_unsure="Give the exact proposed value; note where a current value was unavailable.",
             skill_name="action_plan",
             extra="ROADMAP:\n{strategy?}\n\nBASELINE SCORE:\n{scorecard_baseline?}\n\n"
-            "AEO:\n{aeo_report?}\n\nCOMPETITORS:\n{competitor_report?}",
+            "TECHNICAL/ON-PAGE (current values):\n{tech_report?}\n\n"
+            "KEYWORDS:\n{keyword_report?}\n\nAEO:\n{aeo_report?}\n\n"
+            "COMPETITORS:\n{competitor_report?}",
         ),
+        tools=[retrieve_knowledge],
         before_tool_callback=governance_before_tool,
         output_key="action_plan",
     )
@@ -129,8 +142,9 @@ def create_content_optimizer() -> LlmAgent:
             ],
             if_unsure="Flag the item as needing human input rather than guessing content.",
             skill_name="content_optimizer",
-            extra="FOCUS SECTION (if any):\n{focus_section?}\n\nROADMAP:\n{strategy?}\n\n"
-            "PRIOR CRITIQUE (if any):\n{critique?}",
+            extra="FOCUS SECTION (if any):\n{focus_section?}\n\n"
+            "APPROVED ACTION PLAN (implement these exact values):\n{action_plan?}\n\n"
+            "ROADMAP:\n{strategy?}\n\nPRIOR CRITIQUE (if any):\n{critique?}",
         ),
         tools=[retrieve_knowledge],
         before_tool_callback=governance_before_tool,

@@ -198,6 +198,7 @@ def audit_technical_basics(url: str) -> dict:
         "url": meta.get("final_url", url),
         "title": title,
         "title_len": len(title),
+        "meta_description": desc,
         "meta_description_len": len(desc),
         "h1_count": len(h1s),
         "canonical": canonical_href,
