@@ -18,6 +18,7 @@ import os
 import re
 
 from .. import config
+from ..embeddings import embed_texts
 
 # Standalone scripts don't get the ADK runtime's .env loading — do it ourselves.
 try:
@@ -53,22 +54,6 @@ def _chunk(text: str, target: int, overlap: int) -> list[str]:
     return [c for c in chunks if c.strip()]
 
 
-def _embed(texts: list[str]) -> list[list[float]] | None:
-    try:
-        from google import genai
-
-        client = genai.Client()
-        out: list[list[float]] = []
-        for t in texts:
-            resp = client.models.embed_content(model=config.EMBED_MODEL, contents=t)
-            emb = resp.embeddings[0]
-            out.append(list(getattr(emb, "values", emb)))
-        return out
-    except Exception as e:  # pragma: no cover
-        print(f"[ingest] embedding failed: {e}")
-        return None
-
-
 def main() -> int:
     corpus = sorted(
         glob.glob(os.path.join(config.KNOWLEDGE_DIR, "*.md"))
@@ -87,10 +72,11 @@ def main() -> int:
         for chunk in _chunk(text, config.CHUNK_TARGET_CHARS, config.CHUNK_OVERLAP_CHARS):
             records.append({"source": source, "text": chunk})
 
-    print(f"[ingest] {len(corpus)} docs -> {len(records)} chunks. Embedding...")
-    embeddings = _embed([r["text"] for r in records])
+    print(f"[ingest] {len(corpus)} docs -> {len(records)} chunks. "
+          f"Embedding with {config.EMBED_PROVIDER}:{config.EMBED_MODEL} ...")
+    embeddings = embed_texts([r["text"] for r in records])
     if embeddings is None:
-        print("[ingest] Aborting -- check GOOGLE_API_KEY in app/.env.")
+        print("[ingest] Aborting -- check the API key for your provider in app/.env.")
         return 1
     for r, e in zip(records, embeddings, strict=False):
         r["embedding"] = e

@@ -11,7 +11,7 @@ from __future__ import annotations
 from google.adk.agents import LlmAgent
 from google.adk.tools import google_search
 
-from ..config import WORKER_MODEL, S, build_model
+from ..config import LLM_PROVIDER, WORKER_MODEL, S, build_model
 from ..guardrails import (
     contract,
     governance_before_tool,
@@ -51,13 +51,13 @@ def create_competitor_discovery() -> LlmAgent:
             role="Identify the target site's true SEO competitors (not the user's "
             "business rivals) by who ranks for the niche's keywords.",
             must=[
-                "FREE PATH (no subscription): use serp_competitors on 3-5 head queries "
-                "from the niche to see which domains rank; aggregate the most frequent "
-                "domains as competitors.",
+                "OWNED FREE PATH: call seed_index with 3-5 head queries for the niche to "
+                "build our SERP index, then organic_competitors to read the recurring "
+                "domains back — these are the SEO competitors.",
                 "If Semrush is configured, also use it for keyword-overlap confirmation.",
                 "Return 3-5 competitors max, each with the evidence (which queries).",
-                "If neither serp_competitors (DataForSEO) nor Semrush is configured, say "
-                "so via semrush_status and report what's missing.",
+                "If SEARXNG_URL is not set (seed_index/serp_lookup unavailable) and Semrush "
+                "is off, say so via semrush_status and report what's missing.",
             ],
             must_not=[
                 "Invent competitor domains or overlap numbers.",
@@ -139,7 +139,10 @@ def create_keyword_research() -> LlmAgent:
 
 def create_backlink() -> LlmAgent:
     semrush = build_semrush_toolset(["backlink_research", "overview_research"])
-    tools = [semrush_status, retrieve_knowledge] + ([semrush] if semrush else [])
+    local = build_local_seo_mcp()  # exposes domain_authority (free Open PageRank)
+    tools = ([semrush_status, retrieve_knowledge]
+             + ([local] if local else [])
+             + ([semrush] if semrush else []))
     return _leaf(
         name="backlink",
         model=build_model(WORKER_MODEL),
@@ -151,11 +154,13 @@ def create_backlink() -> LlmAgent:
             must=[
                 "If Semrush is configured: profile backlinks + gap (DR>=50, dofollow, "
                 "min 1,000 monthly traffic, links all competitors have).",
+                "FREE OWNED PATH: use domain_authority (Open PageRank) to score the "
+                "target and competitor domains — our free stand-in for DR/DA.",
                 "FREE FALLBACK (no paid link index exists for backlinks): use "
                 "retrieve_knowledge to produce a grounded authority/link-building STRATEGY "
                 "— digital PR, unlinked-mention reclamation, brand mentions, HARO/Featured "
                 "— and cite the guidance.",
-                "Treat authority scores (DR/DA/AS) as relative proxies, never ground truth.",
+                "Treat authority scores (DR/DA/AS/Open PageRank) as relative proxies, never ground truth.",
             ],
             must_not=[
                 "Invent referring domains or authority numbers.",
@@ -172,27 +177,58 @@ def create_backlink() -> LlmAgent:
 
 
 def create_serp_aeo() -> LlmAgent:
-    # ISOLATED: google_search cannot be mixed with FunctionTools in one agent.
+    # google_search is a Gemini grounding tool — it only works on the Google provider,
+    # and it cannot be mixed with FunctionTools in one agent (so it's isolated here).
+    if LLM_PROVIDER == "google":
+        return _leaf(
+            name="serp_aeo",
+            model=build_model(WORKER_MODEL),
+            description="Analyzes live SERP features and AI-Overview citation patterns "
+            "(Gemini google_search).",
+            instruction=contract(
+                role="Analyze the live SERP for the niche's head terms: which SERP "
+                "features appear (AI Overviews, PAA, featured snippets, sitelinks) and "
+                "which domains get cited in AI answers.",
+                must=[
+                    "Use google_search to observe real results for the target queries.",
+                    "Note when an AI Overview is present (discount click potential).",
+                    "Report which competitors are cited in AI answers, if visible.",
+                ],
+                must_not=[
+                    "Fabricate SERP features or citations you did not observe.",
+                    "Call any other tool (this agent only has search).",
+                ],
+                if_unsure="Report only what the search results actually show.",
+                skill_name="serp_aeo",
+            ),
+            tools=[google_search],
+            output_key=S.SERP_REPORT,
+        )
+
+    # Non-Google provider (e.g. OpenAI): no live Google grounding. Fall back to the
+    # free keyword MCP (demand signals) + optional paid SERP data + knowledge.
+    local = build_local_seo_mcp()
+    tools = [retrieve_knowledge] + ([local] if local else [])
     return _leaf(
         name="serp_aeo",
         model=build_model(WORKER_MODEL),
-        description="Analyzes live SERP features and AI-Overview citation patterns.",
+        description="Assesses SERP/AEO opportunity via keyword demand (+ optional paid SERP).",
         instruction=contract(
-            role="Analyze the live SERP for the niche's head terms: which SERP "
-            "features appear (AI Overviews, PAA, featured snippets, sitelinks) and "
-            "which domains get cited in AI answers.",
+            role="Assess SERP/AEO opportunity for the niche's head terms WITHOUT live "
+            "Google grounding (not available on this model provider).",
             must=[
-                "Use google_search to observe real results for the target queries.",
-                "Note when an AI Overview is present (discount click potential).",
-                "Report which competitors are cited in AI answers, if visible.",
+                "Use question_keywords/keyword_ideas to map the real questions and demand.",
+                "If serp_competitors (DataForSEO) is configured, use it for who-ranks data.",
+                "Use retrieve_knowledge for AEO/SERP best practice and cite it.",
             ],
             must_not=[
-                "Fabricate SERP features or citations you did not observe.",
-                "Call any other tool (this agent only has search).",
+                "Fabricate live SERP features or AI citations — you have no live search.",
+                "Claim to have observed Google results on this provider.",
             ],
-            if_unsure="Report only what the search results actually show.",
+            if_unsure="Report demand/opportunity from the keyword tools and note that live "
+            "SERP observation needs the Gemini provider (google_search) or a paid SERP API.",
             skill_name="serp_aeo",
         ),
-        tools=[google_search],
+        tools=tools,
         output_key=S.SERP_REPORT,
     )

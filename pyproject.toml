@@ -20,6 +20,8 @@ dependencies = [
     "lxml>=5.0.0",             # fast HTML parser backend for bs4
     "numpy>=1.26.0",           # local RAG vector store (cosine similarity)
     "pyyaml>=6.0",             # knowledge corpus versions.yaml
+    "litellm>=1.50.0",         # OpenAI / non-Gemini models via ADK LiteLlm
+    "openai>=1.40.0",          # OpenAI provider (LLM + embeddings)
 ]
 requires-python = ">=3.11,<3.14"
 

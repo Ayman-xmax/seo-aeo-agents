@@ -14,21 +14,15 @@ import json
 import os
 
 from .. import config
+from ..embeddings import embed_texts
 
 _INDEX_PATH = os.path.join(config.VECTOR_STORE_DIR, "index.json")
 
 
 def _embed_query(text: str):
-    """Embed a query string via google-genai; returns list[float] or None."""
-    try:
-        from google import genai
-
-        client = genai.Client()
-        resp = client.models.embed_content(model=config.EMBED_MODEL, contents=text)
-        emb = resp.embeddings[0]
-        return list(getattr(emb, "values", emb))
-    except Exception:
-        return None
+    """Embed a query string with the configured provider; list[float] or None."""
+    vecs = embed_texts([text])
+    return vecs[0] if vecs else None
 
 
 def retrieve_knowledge(query: str, top_k: int) -> dict:

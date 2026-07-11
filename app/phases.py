@@ -15,21 +15,33 @@ from __future__ import annotations
 from google.adk.agents import LoopAgent, ParallelAgent, SequentialAgent
 
 from . import sub_agents as sa
+from .config import COLLECTORS_MODE
 
 
 def build_phase1_diagnose() -> SequentialAgent:
-    collectors = ParallelAgent(
-        name="collectors",
-        description="Runs competitor, technical, keyword, backlink, and SERP/AEO "
-        "analysis concurrently.",
-        sub_agents=[
-            sa.create_competitor_discovery(),
-            sa.create_technical_audit(),
-            sa.create_keyword_research(),
-            sa.create_backlink(),
-            sa.create_serp_aeo(),
-        ],
-    )
+    collector_agents = [
+        sa.create_competitor_discovery(),
+        sa.create_technical_audit(),
+        sa.create_keyword_research(),
+        sa.create_backlink(),
+        sa.create_serp_aeo(),
+    ]
+    # Sequential avoids the concurrent burst that triggers free-tier 429s; parallel
+    # is faster when the provider has headroom (paid tier / OpenAI).
+    if COLLECTORS_MODE == "sequential":
+        collectors = SequentialAgent(
+            name="collectors",
+            description="Runs competitor, technical, keyword, backlink, and SERP/AEO "
+            "analysis one at a time (rate-limit friendly).",
+            sub_agents=collector_agents,
+        )
+    else:
+        collectors = ParallelAgent(
+            name="collectors",
+            description="Runs competitor, technical, keyword, backlink, and SERP/AEO "
+            "analysis concurrently.",
+            sub_agents=collector_agents,
+        )
     return SequentialAgent(
         name="phase1_diagnose",
         description="PHASE 1 — DIAGNOSE & STRATEGIZE (read-only): analyze, conclude, "

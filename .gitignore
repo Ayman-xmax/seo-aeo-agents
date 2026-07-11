@@ -205,5 +205,7 @@ tools/a2a-inspector/
 
 # SEO Agent — generated RAG index (regenerable via `python -m app.knowledge_base.ingest`)
 app/knowledge_base/vector_store/
+# Owned SEO data index (accumulates locally; large & machine-specific)
+seo_data_mcp/seo_index.db*
 # Belt-and-suspenders: never commit the API-key env file
 app/.env
