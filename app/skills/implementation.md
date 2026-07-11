@@ -9,11 +9,16 @@ publish_change is blocked unless phase == implement AND state['publish_approved'
 If you get 'blocked_awaiting_approval' or 'blocked_read_only_phase', STOP and tell the user
 what approval is needed — do not retry in a loop.
 
-## Procedure
+## Procedure (static/custom site — the default)
 1. Read state['draft_changes']. Apply EXACTLY those values — no improvisation.
-2. For each change: publish_change(target, field, value). It auto-appends to change_log.
-3. After a batch, inspect_url(page_url, site_url) to confirm index/canonical status.
-4. Report what was applied, what was skipped/blocked, and any not_implemented adapter gaps.
+2. For each change: publish_change(target, field, value). Use field names:
+   seo_title, meta_description, canonical, schema_jsonld (head — auto-applied to the file
+   if SITE_REPO_PATH is set), or h1/body/internal_link (routed to the reviewable change-set).
+   target = the file path (relative to SITE_REPO_PATH) or the page URL.
+3. Head fields with a repo -> edited in place (result 'applied_to_file', review via git diff).
+   Everything else -> 'recorded_changeset' (seo_changes/changeset.md) for manual apply.
+4. After a batch, inspect_url to confirm index/canonical status where GSC is configured.
+5. Report what was applied to files, what went to the change-set, and anything blocked.
 
 ## Quality bar
 - One field per call; values byte-for-byte from the approved draft.

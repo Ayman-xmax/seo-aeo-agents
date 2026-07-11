@@ -207,5 +207,7 @@ tools/a2a-inspector/
 app/knowledge_base/vector_store/
 # Owned SEO data index (accumulates locally; large & machine-specific)
 seo_data_mcp/seo_index.db*
+# Per-run Phase-2 change-set output
+seo_changes/
 # Belt-and-suspenders: never commit the API-key env file
 app/.env
