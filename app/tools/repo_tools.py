@@ -17,6 +17,8 @@ from google.adk.tools.tool_context import ToolContext
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _WORKDIR = os.path.join(_PROJECT_ROOT, ".site_repos")
+# All edits land on this branch, never main — reviewed via PR before the user merges.
+_BRANCH = "seo-agent-optimizations"
 
 
 def _list_html(root: str, limit: int = 40) -> list[str]:
@@ -59,11 +61,14 @@ def clone_site_repo(repo_url: str, tool_context: ToolContext) -> dict:
     except Exception as e:
         return {"status": "error", "reason": f"clone failed: {e}"}
 
+    # Work on a dedicated branch, never main.
+    subprocess.run(["git", "-C", dest, "checkout", "-B", _BRANCH],
+                   capture_output=True, text=True)
     tool_context.state["site_repo_path"] = dest
     htmls = _list_html(dest)
-    return {"status": "success", "repo_path": dest, "html_files_found": len(htmls),
-            "sample_files": htmls[:15],
-            "note": "Repo is ready. Approved Phase-2 changes will be written to these files."}
+    return {"status": "success", "repo_path": dest, "branch": _BRANCH,
+            "html_files_found": len(htmls), "sample_files": htmls[:15],
+            "note": f"Repo ready on branch '{_BRANCH}'. Approved changes write to these files."}
 
 
 def commit_changes(message: str, tool_context: ToolContext) -> dict:
@@ -85,7 +90,31 @@ def commit_changes(message: str, tool_context: ToolContext) -> dict:
             return {"status": "nothing_to_commit"}
         stat = subprocess.run(["git", "-C", repo, "--no-pager", "show", "--stat",
                                "--oneline", "HEAD"], capture_output=True, text=True)
-        return {"status": "committed", "summary": stat.stdout.strip()[:1200],
-                "note": "Committed locally. Run `git push` in the repo to publish."}
+        return {"status": "committed", "branch": _BRANCH,
+                "summary": stat.stdout.strip()[:1200],
+                "note": f"Committed to branch '{_BRANCH}'. Use push_changes to push it for PR review."}
     except Exception as e:
         return {"status": "error", "reason": f"commit failed: {e}"}
+
+
+def push_changes(tool_context: ToolContext) -> dict:
+    """Push the optimizations branch to origin so the user can open a pull request.
+
+    Needs the user's git write access (credential manager / token). Never touches main.
+    """
+    repo = tool_context.state.get("site_repo_path") or os.environ.get("SITE_REPO_PATH")
+    if not repo:
+        return {"status": "no_repo", "reason": "No site repo — call clone_site_repo first."}
+    try:
+        r = subprocess.run(["git", "-C", repo, "push", "-u", "origin", _BRANCH],
+                           capture_output=True, text=True, timeout=180)
+        if r.returncode != 0:
+            return {"status": "error", "reason": (r.stderr.strip() or r.stdout.strip())[:400],
+                    "hint": "Push needs write access. Ensure your git credentials/token are "
+                    "set up, or push manually: "
+                    f"git -C \"{repo}\" push -u origin {_BRANCH}"}
+        return {"status": "pushed", "branch": _BRANCH,
+                "note": "Pushed. Open a pull request on your repo to review and merge, then "
+                "deploy. Nothing is live until you merge."}
+    except Exception as e:
+        return {"status": "error", "reason": f"push failed: {e}"}

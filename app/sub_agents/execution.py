@@ -28,6 +28,7 @@ from ..tools import (
     get_crux,
     inspect_url,
     publish_change,
+    push_changes,
     query_organic,
     search_analytics,
     write_robots,
@@ -80,8 +81,10 @@ def create_implementation() -> LlmAgent:
                 "declare it; create_page(...) for new content-brief pages.",
                 "Apply exactly the values from the approved action plan / draft — verbatim.",
                 "If a repo was cloned (state has site_repo_path): changes are written to the "
-                "real files (result 'applied_to_file'); then call commit_changes once with a "
-                "clear message and show the user the commit summary.",
+                "real files (result 'applied_to_file') on the 'seo-agent-optimizations' "
+                "branch; then call commit_changes once with a clear message. Offer to "
+                "push_changes so the user can open a pull request (nothing hits main/live "
+                "until they merge). Only push after they say yes.",
                 "If there is NO repo: changes go to the change-set (seo_changes/changeset.md). "
                 "Say so CLEARLY and tell the user: to apply these to the live site, paste the "
                 "repo URL (I'll clone and apply) or apply the change-set manually. Do NOT call "
@@ -103,7 +106,7 @@ def create_implementation() -> LlmAgent:
             extra="APPROVED DRAFT:\n{draft_changes?}",
         ),
         tools=[publish_change, generate_sitemap, write_robots, create_page,
-               commit_changes, inspect_url],
+               commit_changes, push_changes, inspect_url],
         before_tool_callback=governance_before_tool,
         disallow_transfer_to_peers=True,
         output_key=S.CHANGE_LOG,
