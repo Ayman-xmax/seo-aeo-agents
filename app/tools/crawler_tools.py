@@ -207,6 +207,51 @@ def audit_technical_basics(url: str) -> dict:
     }
 
 
+def audit_content(url: str) -> dict:
+    """Audit on-page CONTENT depth & structure for a page (deterministic, ground truth).
+
+    Measures body word count (thin-content flag), heading structure, and extractable
+    formatting (lists/tables — good for AEO). Feeds the Content/Keyword Health Score.
+
+    Args:
+        url: The absolute URL of the page to audit.
+    """
+    html, meta = _fetch(url)
+    if html is None:
+        return {"status": meta["status"], "url": url, "reason": meta.get("reason")}
+
+    soup = BeautifulSoup(html, "lxml")
+    for tag in soup(["script", "style", "noscript", "template"]):
+        tag.decompose()
+    text = soup.get_text(" ", strip=True)
+    words = len(text.split())
+    h2 = len(soup.find_all("h2"))
+    h3 = len(soup.find_all("h3"))
+    lists = len(soup.find_all(["ul", "ol"]))
+    tables = len(soup.find_all("table"))
+
+    findings: list[str] = []
+    if words < 300:
+        findings.append(f"thin_content:{words}words")
+    elif words < 600:
+        findings.append(f"shallow_content:{words}words")
+    if words > 400 and h2 == 0:
+        findings.append("no_h2_structure")
+    if words > 600 and lists == 0 and tables == 0:
+        findings.append("no_extractable_formatting_for_aeo")
+
+    return {
+        "status": "success",
+        "url": meta.get("final_url", url),
+        "word_count": words,
+        "h2_count": h2,
+        "h3_count": h3,
+        "list_count": lists,
+        "table_count": tables,
+        "findings": findings,
+    }
+
+
 def check_robots_and_sitemap(url: str) -> dict:
     """Fetch and validate robots.txt and discover sitemaps for a site.
 

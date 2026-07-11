@@ -110,6 +110,34 @@ def _score_aeo(sig: dict[str, list[dict]]) -> tuple[float | None, dict, list[str
     return round(val, 1), detail, notes
 
 
+def _score_content_keyword(sig: dict[str, list[dict]]) -> tuple[float | None, dict, list[str]]:
+    """Content depth & structure from our own content crawl (deterministic)."""
+    ac = [s for s in sig.get("audit_content", []) if s.get("status") == "success"]
+    if not ac:
+        return None, {}, ["Run audit_content on the target's key pages to score content "
+                          "depth. Keyword-targeting vs the map stays qualitative; exact "
+                          "volumes need Google Ads Keyword Planner (free)."]
+
+    def page_score(s: dict) -> float:
+        w = s.get("word_count", 0)
+        score = 100.0
+        if w < 300:
+            score -= 55
+        elif w < 600:
+            score -= 25
+        f = s.get("findings", [])
+        if "no_h2_structure" in f:
+            score -= 15
+        if "no_extractable_formatting_for_aeo" in f:
+            score -= 10
+        return max(0.0, score)
+
+    val = round(mean(page_score(s) for s in ac), 1)
+    return val, {"content_depth_structure": val}, [
+        "Scores content depth/structure (word count, headings, extractable formatting). "
+        "Keyword-map matching remains a qualitative check in the keyword report."]
+
+
 def _score_off_page(sig: dict[str, list[dict]]) -> tuple[float | None, dict, list[str]]:
     """Off-page authority from OUR OWN PageRank score (local link graph, no paid API)."""
     da = [s for s in sig.get("domain_authority", [])
@@ -139,10 +167,7 @@ def compute_health_score(label: str, tool_context: ToolContext) -> dict:
     scorers = {
         "technical": _score_technical(sig),
         "on_page": _score_on_page(sig),
-        "content_keyword": (None, {}, ["Content/keyword coverage is produced by the "
-                                        "keyword agent as a qualitative map (free "
-                                        "autocomplete ideas). Exact volumes need Google "
-                                        "Ads Keyword Planner (free account)."]),
+        "content_keyword": _score_content_keyword(sig),
         "off_page": _score_off_page(sig),
         "aeo_geo": _score_aeo(sig),
     }

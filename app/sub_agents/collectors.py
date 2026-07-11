@@ -18,6 +18,7 @@ from ..guardrails import (
     harvest_signals_after_tool,
 )
 from ..tools import (
+    audit_content,
     audit_links,
     audit_technical_basics,
     check_robots_and_sitemap,
@@ -54,10 +55,10 @@ def create_competitor_discovery() -> LlmAgent:
                 "OWNED FREE PATH: call seed_index with 3-5 head queries for the niche to "
                 "build our SERP index, then organic_competitors to read the recurring "
                 "domains back — these are the SEO competitors.",
-                "If Semrush is configured, also use it for keyword-overlap confirmation.",
+                "seed_index and serp_lookup work organically out of the box (our own "
+                "SERP fetch — no external service or key needed).",
                 "Return 3-5 competitors max, each with the evidence (which queries).",
-                "If SEARXNG_URL is not set (seed_index/serp_lookup unavailable) and Semrush "
-                "is off, say so via semrush_status and report what's missing.",
+                "If a SERP fetch fails transiently, retry once or report it honestly.",
             ],
             must_not=[
                 "Invent competitor domains or overlap numbers.",
@@ -80,8 +81,8 @@ def create_technical_audit() -> LlmAgent:
         instruction=contract(
             role="Run a technical + on-page SEO audit of the target site's key pages.",
             must=[
-                "For each page: call audit_technical_basics and audit_links; run "
-                "check_robots_and_sitemap once for the site.",
+                "For each page: call audit_technical_basics, audit_links, and "
+                "audit_content; run check_robots_and_sitemap once for the site.",
                 "Use get_crux/run_pagespeed for Core Web Vitals where possible.",
                 "Report each issue with the exact tool field it came from (evidence).",
                 "Apply the crawlable-link rules literally: flag non-anchor href, "
@@ -96,8 +97,8 @@ def create_technical_audit() -> LlmAgent:
             if_unsure="Mark the specific check 'unavailable' and continue.",
             skill_name="technical_audit",
         ),
-        tools=[audit_technical_basics, audit_links, check_robots_and_sitemap,
-               get_crux, run_pagespeed, inspect_url],
+        tools=[audit_technical_basics, audit_links, audit_content,
+               check_robots_and_sitemap, get_crux, run_pagespeed, inspect_url],
         output_key=S.TECH_REPORT,
         after_tool_callback=harvest_signals_after_tool,
     )

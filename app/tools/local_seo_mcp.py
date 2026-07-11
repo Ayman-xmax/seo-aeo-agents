@@ -36,7 +36,7 @@ def build_local_seo_mcp():
                     args=["-m", "seo_data_mcp.server"],
                     cwd=_PROJECT_ROOT,
                 ),
-                timeout=60.0,
+                timeout=240.0,  # crawl-heavy tools (seed_index, keyword_difficulty) need headroom
             ),
         )
     except Exception:

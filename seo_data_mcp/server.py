@@ -23,7 +23,7 @@ import gzip
 import os
 from collections import defaultdict
 from statistics import mean
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qs, unquote, urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -36,6 +36,27 @@ def _cc_reverse_domain(reversed_host: str) -> str:
     """Common Crawl stores hosts reversed ('org.python' -> 'python.org')."""
     return ".".join(reversed(reversed_host.split(".")))
 
+
+def _ddg_serp(query: str, market: str) -> list[dict]:
+    """ORGANIC SERP: fetch + parse DuckDuckGo's HTML endpoint ourselves. No API key,
+    no third-party SEO service — just our own request and parser."""
+    r = requests.post(
+        "https://html.duckduckgo.com/html/",
+        data={"q": query, "kl": f"{market}-en"},
+        headers={"User-Agent": _UA}, timeout=20,
+    )
+    soup = BeautifulSoup(r.text, "lxml")
+    rows: list[dict] = []
+    for i, a in enumerate(soup.select("a.result__a")[:10]):
+        href = a.get("href", "")
+        url = href
+        if "uddg=" in href:  # DDG wraps the real URL in a redirect param
+            qs = parse_qs(urlparse(href).query)
+            url = unquote(qs.get("uddg", [href])[0])
+        if url.startswith("http"):
+            rows.append({"rank": i + 1, "domain": _domain_of(url), "url": url})
+    return rows
+
 mcp = FastMCP("seo-data")
 
 
@@ -46,7 +67,7 @@ def _domain_of(url: str) -> str:
 
 def _outbound_domains(url: str) -> tuple[str, set[str]]:
     """Fetch a page and return (its domain, set of external domains it links to)."""
-    r = requests.get(url, headers={"User-Agent": _UA}, timeout=15)
+    r = requests.get(url, headers={"User-Agent": _UA}, timeout=8)
     src = _domain_of(r.url)
     soup = BeautifulSoup(r.text, "lxml")
     dsts: set[str] = set()
@@ -243,44 +264,43 @@ def referring_domains(domain: str, limit: int = 100) -> dict:
 
 @mcp.tool()
 def serp_lookup(query: str, market: str = "us") -> dict:
-    """Top organic domains for a query via self-hosted SearXNG (FREE, owned).
+    """Top organic domains for a query — works out of the box, no external SEO service.
 
-    Results are saved to our SERP index, which powers competitor discovery and
-    keyword difficulty. Set SEARXNG_URL to your SearXNG instance (self-host = $0,
-    fully owned). Returns not_configured otherwise (never guesses).
+    Default: we fetch + parse the SERP ourselves (organic). If you self-host SearXNG
+    and set SEARXNG_URL, it uses that instead. Results accumulate in our owned SERP
+    index (powers competitor discovery + keyword difficulty).
 
     Args:
         query: The search query.
         market: Two-letter country/language code.
     """
     base = os.environ.get("SEARXNG_URL")
-    if not base:
-        return {"status": "not_configured",
-                "reason": "Set SEARXNG_URL to a SearXNG instance (self-host for free, "
-                "full ownership) to enable SERP/competitor/difficulty data."}
     try:
-        r = requests.get(f"{base.rstrip('/')}/search",
-                         params={"q": query, "format": "json", "language": market},
-                         timeout=20)
-        results = r.json().get("results", [])
-        rows = []
-        for i, x in enumerate(results[:10]):
-            if x.get("url"):
-                rows.append({"rank": i + 1, "domain": _domain_of(x["url"]),
-                             "url": x["url"]})
+        if base:
+            r = requests.get(f"{base.rstrip('/')}/search",
+                             params={"q": query, "format": "json", "language": market},
+                             headers={"User-Agent": _UA}, timeout=20)
+            results = r.json().get("results", [])
+            rows = [{"rank": i + 1, "domain": _domain_of(x["url"]), "url": x["url"]}
+                    for i, x in enumerate(results[:10]) if x.get("url")]
+            source = "searxng"
+        else:
+            rows = _ddg_serp(query, market)  # organic, no key, no third-party API
+            source = "organic_ddg"
         store.record_serp(query, market, rows)  # accumulate = ownership
-        return {"status": "success", "query": query, "count": len(rows), "rows": rows}
+        return {"status": "success", "query": query, "source": source,
+                "count": len(rows), "rows": rows}
     except Exception as e:
-        return {"status": "unavailable", "reason": f"SearXNG query failed: {e}"}
+        return {"status": "unavailable", "reason": f"SERP fetch failed: {e}"}
 
 
 @mcp.tool()
 def keyword_difficulty(keyword: str, market: str = "us") -> dict:
-    """OUR OWN keyword difficulty (0-100) — we compute it, we own the formula.
+    """OUR OWN keyword difficulty (0-100) — fully organic, no external SEO API.
 
-    Fetches the top-10 SERP (serp_lookup) and averages the ranking domains' Open
-    PageRank authority: stronger incumbents => harder. Requires SEARXNG_URL and
-    OPENPAGERANK_API_KEY (both free). Honest: this is our approximation, not Semrush's.
+    Fetches the SERP (organic), builds our link graph from the ranking pages, runs
+    local PageRank, and averages the top domains' authority: stronger incumbents =>
+    harder. Our formula, our data. Honest: an approximation, not Semrush's.
 
     Args:
         keyword: The keyword to score.
@@ -288,20 +308,19 @@ def keyword_difficulty(keyword: str, market: str = "us") -> dict:
     """
     serp = serp_lookup(keyword, market)
     if serp.get("status") != "success" or not serp.get("rows"):
-        return {"status": "needs_serp_source",
-                "reason": "keyword_difficulty needs SERP data — configure SEARXNG_URL."}
-    scores = []
-    for row in serp["rows"]:
-        a = domain_authority(row["domain"])
-        if a.get("status") == "success" and a.get("authority_0_10") is not None:
-            scores.append(float(a["authority_0_10"]))
+        return {"status": "unavailable",
+                "reason": "Could not fetch a SERP for this keyword (try again)."}
+    for row in serp["rows"][:5]:
+        crawl_links(row["url"])  # build the graph from the top ranking pages (bounded)
+    authority.compute_pagerank()
+    scores = [rec["score"] for row in serp["rows"]
+              if (rec := store.get_authority(row["domain"])) is not None]
     if not scores:
-        return {"status": "needs_authority",
-                "reason": "keyword_difficulty needs OPENPAGERANK_API_KEY for authority."}
-    kd = round(mean(scores) / 10 * 100)
+        return {"status": "unavailable", "reason": "Authority graph could not be built."}
+    kd = round(mean(scores))
     return {"status": "success", "keyword": keyword, "difficulty_0_100": kd,
             "sampled_domains": len(scores),
-            "basis": "mean Open PageRank of top-10 ranking domains (our own formula)"}
+            "basis": "mean local-PageRank authority of top ranking domains (organic, ours)"}
 
 
 @mcp.tool()
@@ -349,18 +368,15 @@ def keyword_volume(keywords: str, market: str = "us") -> dict:
 def seed_index(seeds: str, market: str = "us") -> dict:
     """Bootstrap the owned competitor index by fetching SERPs for seed queries.
 
-    Runs serp_lookup over each seed + its top autocomplete expansions, recording
-    who ranks into our SQLite index. After this, organic_competitors returns real
-    competitors. Requires SEARXNG_URL. This is how the owned dataset is born.
+    Runs serp_lookup (organic — no external service) over each seed + its top
+    autocomplete expansions, recording who ranks into our SQLite index and building
+    the link graph. After this, organic_competitors returns real competitors. This is
+    how the owned dataset is born.
 
     Args:
         seeds: Comma-separated head queries for the niche.
         market: Two-letter country/language code.
     """
-    if not os.environ.get("SEARXNG_URL"):
-        return {"status": "not_configured",
-                "reason": "seed_index needs SEARXNG_URL (self-hosted SearXNG) to fetch "
-                "SERPs. Set it, then re-run to build your owned competitor index."}
     queries: list[str] = []
     for seed in [s.strip() for s in seeds.split(",") if s.strip()]:
         queries.append(seed)
@@ -375,9 +391,9 @@ def seed_index(seeds: str, market: str = "us") -> dict:
             errors += 1
             continue
         fetched += 1
-        # Self-build the link graph: crawl the top ranking pages (bounded).
-        for row in res.get("rows", [])[:3]:
-            if crawled < 30 and crawl_links(row["url"]).get("status") == "success":
+        # Self-build the link graph: crawl the top ranking pages (bounded for latency).
+        for row in res.get("rows", [])[:2]:
+            if crawled < 8 and crawl_links(row["url"]).get("status") == "success":
                 crawled += 1
     pr = compute_authority() if crawled else {"status": "empty"}
     comps = store.competitors_from_index(market, 10)

@@ -9,6 +9,7 @@ when creds are absent — never guessing. CMS publishing is gated.
 
 from .cms_publish_tools import publish_change
 from .crawler_tools import (
+    audit_content,
     audit_links,
     audit_technical_basics,
     check_robots_and_sitemap,
@@ -21,6 +22,7 @@ from .scoring_tools import compute_health_score, diff_scorecards
 from .semrush_mcp import build_semrush_toolset, semrush_status
 
 __all__ = [
+    "audit_content",
     "audit_links",
     "audit_technical_basics",
     "build_semrush_toolset",

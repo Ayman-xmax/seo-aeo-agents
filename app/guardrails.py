@@ -134,6 +134,7 @@ def governance_before_tool(
 # Deterministic tools whose raw output feeds the Health Score. Harvesting their
 # ground-truth results into a `signals` bag is what lets scoring be pure code.
 _HARVEST_TOOLS = {
+    "audit_content",
     "audit_links",
     "audit_technical_basics",
     "check_robots_and_sitemap",

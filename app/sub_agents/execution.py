@@ -52,7 +52,10 @@ def create_scorer(label: str) -> LlmAgent:
         tools=[compute_health_score],
         before_tool_callback=governance_before_tool,
         disallow_transfer_to_peers=True,
-        output_key=(S.SCORECARD_BASELINE if label == "baseline" else S.SCORECARD_AFTER),
+        # Do NOT reuse the scorecard state key here — compute_health_score writes the
+        # structured dict to S.SCORECARD_*; the agent's narrative goes to its own key so
+        # it doesn't overwrite the dict that Phase 3's diff_scorecards depends on.
+        output_key=f"scorecard_{label}_summary",
     )
 
 

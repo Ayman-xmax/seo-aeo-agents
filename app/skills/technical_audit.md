@@ -10,6 +10,8 @@ must cite the exact tool field it came from.
    a. audit_technical_basics(url) — title/meta length, single H1, canonical, meta-robots,
       JSON-LD types (flag deprecated FAQ/HowTo).
    b. audit_links(url) — apply Google's crawlable-link rules literally.
+   c. audit_content(url) — word count / thin-content, heading structure, extractable
+      formatting (feeds the Content/Keyword score).
 3. get_crux(url) for field Core Web Vitals; run_pagespeed(url, 'mobile') for lab diagnostics
    on any page CrUX can't cover. Mobile first — Google indexes the mobile version.
 4. inspect_url(page_url, site_url) to confirm index status where a GSC property is configured.

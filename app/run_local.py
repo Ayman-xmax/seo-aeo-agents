@@ -19,6 +19,13 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
+# Windows consoles default to cp1252 and crash on Unicode (≤, →) in tool output.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
@@ -75,7 +82,7 @@ async def main(prompt: str) -> None:
         app_name=adk_app.name, user_id=USER_ID, session_id=SESSION_ID
     )
     sc = session.state.get("scorecard_baseline")
-    if sc:
+    if isinstance(sc, dict):
         print(f"\n=== BASELINE SCORE: overall={sc.get('overall')} coverage={sc.get('coverage')}")
         for c in sc.get("categories", []):
             print(f"      {c['category']}: {c['score']}")
