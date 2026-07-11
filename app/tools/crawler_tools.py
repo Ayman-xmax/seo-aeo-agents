@@ -117,6 +117,7 @@ def audit_links(url: str) -> dict:
                 issues.append({"type": "chained_links", "count": len(kids)})
                 break
 
+    _record_graph_edges(meta.get("final_url", url), soup)  # self-build the link graph
     over_link_limit = total_a_href > config.MAX_LINKS_PER_PAGE
     return {
         "status": "success",
@@ -204,6 +205,61 @@ def audit_technical_basics(url: str) -> dict:
         "schema_types": schema_types,
         "deprecated_schema_present": deprecated_schema,
         "findings": findings,
+    }
+
+
+def _dom(url: str) -> str:
+    net = urlparse(url).netloc.lower()
+    return net[4:] if net.startswith("www.") else net
+
+
+def _record_graph_edges(src_url: str, soup) -> None:
+    """Feed our owned link graph automatically whenever we crawl a page (so off-page
+    authority builds itself — no reliance on the LLM calling a tool)."""
+    try:
+        from seo_data_mcp import store as _store
+    except Exception:
+        return
+    src = _dom(src_url)
+    dsts = set()
+    for a in soup.find_all("a", href=True):
+        full = urljoin(src_url, a["href"])
+        if full.startswith("http"):
+            d = _dom(full)
+            if d and d != src:
+                dsts.add(d)
+    if dsts:
+        _store.add_edges(src, list(dsts))
+
+
+def fetch_site_overview(url: str) -> dict:
+    """Read a page's content so the agent can understand what the site/business IS and
+    infer its niche on its own: title, meta description, H1/H2 headings, and a body
+    text excerpt. Use this on a target site before setting the niche.
+
+    Args:
+        url: The site URL to read (usually the homepage).
+    """
+    html, meta = _fetch(url)
+    if html is None:
+        return {"status": meta["status"], "url": url, "reason": meta.get("reason")}
+    soup = BeautifulSoup(html, "lxml")
+    title = soup.title.get_text(strip=True) if soup.title else ""
+    desc_el = soup.find("meta", attrs={"name": "description"})
+    desc = desc_el.get("content", "").strip() if desc_el else ""
+    h1 = [h.get_text(" ", strip=True) for h in soup.find_all("h1")][:5]
+    h2 = [h.get_text(" ", strip=True) for h in soup.find_all("h2")][:12]
+    for tag in soup(["script", "style", "noscript", "template"]):
+        tag.decompose()
+    text = soup.get_text(" ", strip=True)
+    return {
+        "status": "success",
+        "url": meta.get("final_url", url),
+        "title": title,
+        "meta_description": desc,
+        "h1": h1,
+        "h2": h2,
+        "text_excerpt": text[:1800],
     }
 
 

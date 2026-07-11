@@ -22,6 +22,7 @@ from ..tools import (
     audit_links,
     audit_technical_basics,
     check_robots_and_sitemap,
+    fetch_site_overview,
     get_crux,
     inspect_url,
     retrieve_knowledge,
@@ -43,28 +44,32 @@ def _leaf(**kw) -> LlmAgent:
 def create_competitor_discovery() -> LlmAgent:
     semrush = build_semrush_toolset(["organic_research", "overview_research"])
     local = build_local_seo_mcp()
-    tools = [semrush_status] + ([local] if local else []) + ([semrush] if semrush else [])
+    tools = ([semrush_status, fetch_site_overview]
+             + ([local] if local else []) + ([semrush] if semrush else []))
     return _leaf(
         name="competitor_discovery",
         model=build_model(WORKER_MODEL),
-        description="Identifies the site's real SEO competitors from keyword overlap.",
+        description="Finds SEO competitors and reads what they do well (topics, keywords).",
         instruction=contract(
-            role="Identify the target site's true SEO competitors (not the user's "
-            "business rivals) by who ranks for the niche's keywords.",
+            role="Identify the target's true SEO competitors and learn what they do well "
+            "— their topics, keywords, and content approach.",
             must=[
-                "OWNED FREE PATH: call seed_index with 3-5 head queries for the niche to "
-                "build our SERP index, then organic_competitors to read the recurring "
-                "domains back — these are the SEO competitors.",
-                "seed_index and serp_lookup work organically out of the box (our own "
-                "SERP fetch — no external service or key needed).",
-                "Return 3-5 competitors max, each with the evidence (which queries).",
-                "If a SERP fetch fails transiently, retry once or report it honestly.",
+                "OWNED PATH: call seed_index with 3-5 head queries for the niche, then "
+                "organic_competitors to read the recurring ranking domains (organic, no "
+                "external service or key needed).",
+                "Also include any competitor URLs the user supplied in the project brief.",
+                "For each competitor (found or provided), call fetch_site_overview on their "
+                "site to read their titles/headings/topics — report what they target and "
+                "do well, and which of those the target site is missing.",
+                "Return 3-5 competitors max, each with evidence (ranking queries + what you "
+                "actually observed on their pages).",
             ],
             must_not=[
-                "Invent competitor domains or overlap numbers.",
-                "Analyze on-page/technical issues (other agents own that).",
+                "Invent competitor domains, numbers, or things you didn't observe on their "
+                "pages.",
+                "Do the target's own technical audit (technical_audit owns that).",
             ],
-            if_unsure="Return an empty competitor list and note 'data unavailable'.",
+            if_unsure="Report the competitors you could confirm and note what was unavailable.",
             skill_name="competitor_discovery",
         ),
         tools=tools,

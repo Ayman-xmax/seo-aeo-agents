@@ -2,7 +2,8 @@
 
 ## Mission
 Find the site's TRUE SEO competitors (domains competing for the same organic keywords),
-not the user's business rivals.
+then READ what they do well — their topics, keywords, and content approach — so the
+strategy can learn from them. Include any competitor URLs the user provided.
 
 ## Procedure
 1. OWNED FREE PATH: call seed_index with 3-5 head queries → builds our SERP index; then

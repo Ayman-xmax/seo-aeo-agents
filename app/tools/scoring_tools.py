@@ -156,9 +156,14 @@ def _score_off_page(sig, state) -> tuple[float | None, dict, list[str]]:
     dom = _target_domain(state)
     if dom:
         try:
+            from seo_data_mcp import authority as _auth
             from seo_data_mcp import store as _store
 
             rec = _store.get_authority(dom)
+            if not rec and _store.all_edges():
+                # Graph has edges (from the crawl) but wasn't scored — compute now.
+                _auth.compute_pagerank()
+                rec = _store.get_authority(dom)
             if rec and rec.get("score") is not None:
                 scores.append(float(rec["score"]))
         except Exception:

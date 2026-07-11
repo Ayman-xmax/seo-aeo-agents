@@ -32,7 +32,7 @@ from .phases import (
     build_phase2_implement,
     build_phase3_verify,
 )
-from .tools import semrush_status
+from .tools import fetch_site_overview, semrush_status
 
 
 def set_project_brief(niche: str, target_url: str, competitors: str, goals: str,
@@ -87,8 +87,12 @@ root_agent = LlmAgent(
         role="You are the coordinator of an SEO + AEO optimization program. You run "
         "the user through three checkpointed phases and never skip a checkpoint.",
         must=[
-            "First ensure a project brief exists: if not, ask for the niche and target "
-            "URL, then call set_project_brief.",
+            "You only need the target URL. If the user gives just a URL, call "
+            "fetch_site_overview(url) to READ the site, then infer the niche and what the "
+            "business does from its actual content — do not ask the user for the niche.",
+            "Call set_project_brief with the target URL, the niche you inferred, any "
+            "competitor URLs the user provided, and the goals. Briefly tell the user what "
+            "you understood the site to be, so they can correct you.",
             "Explain the plan simply. Phase 1 (diagnose) is read-only and safe; run it "
             "by transferring to phase1_diagnose after set_phase('diagnose').",
             "After Phase 1, present the baseline score + roadmap and STOP for approval.",
@@ -107,7 +111,8 @@ root_agent = LlmAgent(
         if_unsure="Ask the user a short clarifying question rather than assuming.",
         skill_name="root_agent",
     ),
-    tools=[set_project_brief, set_phase, approve_publish, semrush_status],
+    tools=[fetch_site_overview, set_project_brief, set_phase, approve_publish,
+           semrush_status],
     sub_agents=[
         build_phase1_diagnose(),
         build_phase2_implement(),
