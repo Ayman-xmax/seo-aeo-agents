@@ -5,11 +5,14 @@ Find the site's TRUE SEO competitors (domains competing for the same organic key
 not the user's business rivals.
 
 ## Procedure
-1. Call semrush_status first. If not_configured, report exactly what env vars are missing
-   and return an empty list — do not guess.
-2. Use organic_research / overview_research to find domains with high keyword overlap for
-   the niche and target URL.
-3. Rank by keyword-overlap %; keep the top 3-5. Note each competitor's overlap evidence.
+1. FREE PATH: run serp_competitors on 3-5 head queries from the niche; aggregate the
+   domains that recur across queries — those are your SEO competitors. (Needs DataForSEO
+   creds; cheap pay-per-call, no Semrush subscription.)
+2. If Semrush is configured, also use organic_research / overview_research for keyword-
+   overlap confirmation.
+3. Rank by frequency/overlap; keep the top 3-5, each with the queries that surfaced it.
+4. If neither serp_competitors nor Semrush is configured, call semrush_status and report
+   exactly what's missing — do not guess domains.
 
 ## Quality bar
 - 3-5 competitors max (more dilutes the gap analyses downstream).

@@ -5,13 +5,14 @@ Build an intent-clustered keyword map for the niche, mapped to target URLs to pr
 cannibalization.
 
 ## Procedure
-1. semrush_status; if not_configured, say so and proceed with only what's available.
-2. keyword_research for seed → expansion: volume, Keyword Difficulty, SERP features.
-3. Run the gap angle: keywords competitors rank for that the target doesn't (Missing/Weak
-   buckets are highest value).
-4. Cluster by shared intent + semantics + SERP overlap. Classify intent (informational /
-   navigational / commercial / transactional) via keywords THEN the dominant SERP format.
-5. Map each cluster to ONE target URL; pick the clearest/highest-volume term as primary.
+1. FREE FIRST: keyword_ideas(seed) + question_keywords(seed) → a large list of REAL
+   autocomplete queries. Use autocomplete() to refine specific angles. No subscription needed.
+2. If Semrush is configured, enrich with volume, Keyword Difficulty, and the gap angle
+   (Missing/Weak buckets). If not, cluster on the free query lists WITHOUT volumes.
+3. Cluster by shared intent + semantics. Classify intent (informational / navigational /
+   commercial / transactional) via keywords THEN the dominant SERP format.
+4. Map each cluster to ONE target URL; pick the clearest term as primary (highest volume
+   if you have it, else the head/most-generic term).
 
 ## Quality bar
 - Every volume/difficulty number is tool-sourced, never invented.

@@ -26,6 +26,7 @@ from ..tools import (
     run_pagespeed,
     semrush_status,
 )
+from ..tools.local_seo_mcp import build_local_seo_mcp
 from ..tools.semrush_mcp import build_semrush_toolset
 
 
@@ -39,19 +40,23 @@ def _leaf(**kw) -> LlmAgent:
 
 def create_competitor_discovery() -> LlmAgent:
     semrush = build_semrush_toolset(["organic_research", "overview_research"])
-    tools = [semrush_status] + ([semrush] if semrush else [])
+    local = build_local_seo_mcp()
+    tools = [semrush_status] + ([local] if local else []) + ([semrush] if semrush else [])
     return _leaf(
         name="competitor_discovery",
         model=build_model(WORKER_MODEL),
         description="Identifies the site's real SEO competitors from keyword overlap.",
         instruction=contract(
             role="Identify the target site's true SEO competitors (not the user's "
-            "business rivals) by organic keyword overlap in its niche.",
+            "business rivals) by who ranks for the niche's keywords.",
             must=[
-                "Use the Semrush tools to find domains that rank for the same keywords.",
-                "Return 3-5 competitors max, each with the overlap evidence.",
-                "If Semrush is not configured, call semrush_status and report exactly "
-                "what is missing.",
+                "FREE PATH (no subscription): use serp_competitors on 3-5 head queries "
+                "from the niche to see which domains rank; aggregate the most frequent "
+                "domains as competitors.",
+                "If Semrush is configured, also use it for keyword-overlap confirmation.",
+                "Return 3-5 competitors max, each with the evidence (which queries).",
+                "If neither serp_competitors (DataForSEO) nor Semrush is configured, say "
+                "so via semrush_status and report what's missing.",
             ],
             must_not=[
                 "Invent competitor domains or overlap numbers.",
@@ -99,25 +104,31 @@ def create_technical_audit() -> LlmAgent:
 
 def create_keyword_research() -> LlmAgent:
     semrush = build_semrush_toolset(["keyword_research", "organic_research"])
-    tools = [semrush_status] + ([semrush] if semrush else [])
+    local = build_local_seo_mcp()
+    tools = [semrush_status] + ([local] if local else []) + ([semrush] if semrush else [])
     return _leaf(
         name="keyword_research",
         model=build_model(WORKER_MODEL),
-        description="Researches keywords (volume/KD/gap) and clusters them by intent.",
+        description="Researches keywords (free autocomplete + optional Semrush) and clusters them by intent.",
         instruction=contract(
             role="Research keywords for the niche and cluster them by search intent "
             "for the target site.",
             must=[
-                "Use Semrush tools for volume, difficulty, and keyword-gap data.",
+                "FREE PATH (no subscription): use keyword_ideas and question_keywords to "
+                "generate a large list of REAL search queries from seed topics; use "
+                "autocomplete to refine.",
                 "Group keywords into intent-based clusters and map each cluster to a "
                 "target URL to avoid cannibalization.",
-                "Report volumes/difficulty only as returned by the tools.",
+                "If Semrush is configured, enrich clusters with its volume/difficulty/gap "
+                "data; otherwise cluster on the free query lists WITHOUT volumes.",
+                "Report volumes/difficulty ONLY when a tool returned them.",
             ],
             must_not=[
-                "Invent search volumes or difficulty scores.",
+                "Invent search volumes or difficulty scores — the free tools don't provide "
+                "them, so leave them blank rather than guessing.",
                 "Perform technical or backlink analysis.",
             ],
-            if_unsure="Report which keyword data is unavailable and proceed with what exists.",
+            if_unsure="Cluster the free keyword ideas and note that volume/difficulty needs a paid source.",
             skill_name="keyword_research",
         ),
         tools=tools,
