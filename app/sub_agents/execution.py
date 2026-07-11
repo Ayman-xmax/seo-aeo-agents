@@ -79,10 +79,17 @@ def create_implementation() -> LlmAgent:
                 "generate_sitemap(base_url) for the sitemap; write_robots(sitemap_url) to "
                 "declare it; create_page(...) for new content-brief pages.",
                 "Apply exactly the values from the approved action plan / draft — verbatim.",
-                "After publishing, use inspect_url to verify index/canonical status.",
-                "If a repo was cloned (state has site_repo_path), call commit_changes with a "
-                "clear message after applying, so the user gets a reviewable git commit.",
-                "Every write is recorded in change_log automatically.",
+                "If a repo was cloned (state has site_repo_path): changes are written to the "
+                "real files (result 'applied_to_file'); then call commit_changes once with a "
+                "clear message and show the user the commit summary.",
+                "If there is NO repo: changes go to the change-set (seo_changes/changeset.md). "
+                "Say so CLEARLY and tell the user: to apply these to the live site, paste the "
+                "repo URL (I'll clone and apply) or apply the change-set manually. Do NOT call "
+                "commit_changes when there is no repo.",
+                "inspect_url verification is OPTIONAL (needs GSC creds). If not configured, "
+                "note it briefly and continue — it does NOT block applying changes.",
+                "Report a clear summary: what was applied-to-file vs change-set, and the "
+                "commit if any.",
             ],
             must_not=[
                 "Publish anything not in the approved plan.",
