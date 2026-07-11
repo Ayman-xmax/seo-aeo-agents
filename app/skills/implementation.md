@@ -9,16 +9,25 @@ publish_change is blocked unless phase == implement AND state['publish_approved'
 If you get 'blocked_awaiting_approval' or 'blocked_read_only_phase', STOP and tell the user
 what approval is needed — do not retry in a loop.
 
-## Procedure (static/custom site — the default)
-1. Read state['draft_changes']. Apply EXACTLY those values — no improvisation.
-2. For each change: publish_change(target, field, value). Use field names:
-   seo_title, meta_description, canonical, schema_jsonld (head — auto-applied to the file
-   if SITE_REPO_PATH is set), or h1/body/internal_link (routed to the reviewable change-set).
-   target = the file path (relative to SITE_REPO_PATH) or the page URL.
-3. Head fields with a repo -> edited in place (result 'applied_to_file', review via git diff).
-   Everything else -> 'recorded_changeset' (seo_changes/changeset.md) for manual apply.
-4. After a batch, inspect_url to confirm index/canonical status where GSC is configured.
-5. Report what was applied to files, what went to the change-set, and anything blocked.
+## Procedure (static/custom site — the default). Pick the right tool per change:
+1. On-page/AEO edits: publish_change(target, field, value) with field =
+   seo_title | meta_description | canonical | schema_jsonld (head) | h1 | content_append
+   (body). Head + h1 + content_append are AUTO-APPLIED to the file when SITE_REPO_PATH is
+   set; other body edits go to the change-set. target = file path (relative to SITE_REPO_PATH)
+   or the page URL.
+2. Sitemap: generate_sitemap(base_url) -> writes sitemap.xml. Then write_robots(sitemap_url)
+   to declare it.
+3. New content-brief pages: create_page(path, title, meta_description, heading, body_html).
+4. Apply EXACTLY the approved action-plan/draft values — verbatim, no improvisation.
+5. After a batch, inspect_url to confirm index/canonical status where GSC is configured.
+6. Report what was applied to files vs the change-set, and anything blocked.
+
+## Honest boundary
+- You CAN implement: titles, metas, canonical, schema, H1, appended content, sitemap,
+  robots, and new pages — end to end.
+- You CANNOT acquire backlinks (no tool can make third parties link). Draft outreach and
+  find targets, but never claim to have built links. GSC sitemap submission needs the
+  user's Google connection.
 
 ## Quality bar
 - One field per call; values byte-for-byte from the approved draft.

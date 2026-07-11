@@ -25,6 +25,8 @@ from google.adk.tools.tool_context import ToolContext
 # Head-level fields we can safely apply to a static HTML file.
 _HEAD_FIELDS = {"seo_title", "title", "meta_description", "canonical",
                 "schema_jsonld", "meta_robots"}
+# Body edits we can apply structurally (h1 replace, append a content section).
+_BODY_FIELDS = {"h1", "content_append"}
 _CHANGESET_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__)))), "seo_changes")
 
@@ -89,12 +91,40 @@ class StaticSitePublisher(Publisher):
             f.write(new)
         return True
 
+    def _edit_body(self, path: str, field: str, value: str) -> bool:
+        with open(path, encoding="utf-8") as f:
+            html = f.read()
+        if field == "h1":
+            new, n = re.subn(r"<h1[^>]*>.*?</h1>", f"<h1>{value}</h1>",
+                             html, count=1, flags=re.S | re.I)
+            if n == 0:  # no H1 present -> insert right after <body>
+                new, n = re.subn(r"(<body[^>]*>)", r"\1\n  <h1>" + value + "</h1>",
+                                 html, count=1, flags=re.I)
+        elif field == "content_append":
+            new, n = re.subn(r"</body>", f"{value}\n</body>", html, count=1, flags=re.I)
+        else:
+            return False
+        if n == 0:
+            return False
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(new)
+        return True
+
     def apply(self, target: str, field: str, value: str) -> dict:
         path = self._resolve(target)
         # Head fields with a resolved local file -> edit in place (git tracks it).
         if path and field in _HEAD_FIELDS and field != "meta_robots":
             try:
                 if self._edit_head(path, field, value):
+                    return {"status": "applied_to_file", "file": path, "field": field,
+                            "note": "Edited in place — review with `git diff`."}
+            except Exception as e:
+                return {"status": "error", "reason": f"file edit failed: {e}",
+                        "file": path}
+        # Body fields (H1, appended content) with a resolved file -> edit in place.
+        if path and field in _BODY_FIELDS:
+            try:
+                if self._edit_body(path, field, value):
                     return {"status": "applied_to_file", "file": path, "field": field,
                             "note": "Edited in place — review with `git diff`."}
             except Exception as e:

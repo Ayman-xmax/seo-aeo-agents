@@ -21,6 +21,7 @@ from .knowledge_retrieval import retrieve_knowledge
 from .pagespeed_crux_tools import get_crux, run_pagespeed
 from .scoring_tools import compute_health_score, diff_scorecards
 from .semrush_mcp import build_semrush_toolset, semrush_status
+from .site_build_tools import create_page, generate_sitemap, write_robots
 
 __all__ = [
     "audit_content",
@@ -29,8 +30,10 @@ __all__ = [
     "build_semrush_toolset",
     "check_robots_and_sitemap",
     "compute_health_score",
+    "create_page",
     "diff_scorecards",
     "fetch_site_overview",
+    "generate_sitemap",
     "get_crux",
     "inspect_url",
     "publish_change",
@@ -39,4 +42,5 @@ __all__ = [
     "run_pagespeed",
     "search_analytics",
     "semrush_status",
+    "write_robots",
 ]

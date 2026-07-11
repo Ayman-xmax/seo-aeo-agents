@@ -21,12 +21,15 @@ from ..tools import (
     audit_technical_basics,
     check_robots_and_sitemap,
     compute_health_score,
+    create_page,
     diff_scorecards,
+    generate_sitemap,
     get_crux,
     inspect_url,
     publish_change,
     query_organic,
     search_analytics,
+    write_robots,
 )
 
 
@@ -65,25 +68,31 @@ def create_implementation() -> LlmAgent:
         model=build_model(WORKER_MODEL),
         description="Applies approved changes to the CMS (gated) and verifies indexing.",
         instruction=contract(
-            role="Apply the approved drafted changes to the live site via publish_change, "
-            "one field at a time, then verify index status.",
+            role="Apply the approved changes to the site, then verify. You can implement "
+            "on-page, technical, content, and AEO changes end-to-end.",
             must=[
-                "Only apply items the user has approved; publish_change is blocked until "
+                "Only apply approved items; the write tools are blocked until "
                 "state['publish_approved'] is True.",
-                "Apply exactly the values in state['draft_changes'] — do not improvise.",
+                "Use the right tool per change: publish_change(target, field, value) for "
+                "seo_title/meta_description/canonical/schema_jsonld/h1/content_append; "
+                "generate_sitemap(base_url) for the sitemap; write_robots(sitemap_url) to "
+                "declare it; create_page(...) for new content-brief pages.",
+                "Apply exactly the values from the approved action plan / draft — verbatim.",
                 "After publishing, use inspect_url to verify index/canonical status.",
-                "Record every change (publish_change appends to change_log automatically).",
+                "Every write is recorded in change_log automatically.",
             ],
             must_not=[
-                "Publish anything not in the approved draft.",
+                "Publish anything not in the approved plan.",
                 "Claim a page was indexed without an inspect_url verdict.",
                 "Use Google's Indexing API for normal pages (it is JobPosting-only).",
+                "Claim to have BUILT backlinks — you can draft outreach and find targets, "
+                "but acquiring links is a human/PR activity, not something you execute.",
             ],
             if_unsure="Stop and ask for human confirmation before publishing.",
             skill_name="implementation",
             extra="APPROVED DRAFT:\n{draft_changes?}",
         ),
-        tools=[publish_change, inspect_url],
+        tools=[publish_change, generate_sitemap, write_robots, create_page, inspect_url],
         before_tool_callback=governance_before_tool,
         disallow_transfer_to_peers=True,
         output_key=S.CHANGE_LOG,
