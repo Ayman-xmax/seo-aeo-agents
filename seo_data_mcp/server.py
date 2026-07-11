@@ -19,7 +19,9 @@ Run:  python -m seo_data_mcp.server   (stdio transport)
 
 from __future__ import annotations
 
+import gzip
 import os
+from collections import defaultdict
 from statistics import mean
 from urllib.parse import urljoin, urlparse
 
@@ -28,6 +30,11 @@ from bs4 import BeautifulSoup
 from mcp.server.fastmcp import FastMCP
 
 from . import authority, store
+
+
+def _cc_reverse_domain(reversed_host: str) -> str:
+    """Common Crawl stores hosts reversed ('org.python' -> 'python.org')."""
+    return ".".join(reversed(reversed_host.split(".")))
 
 mcp = FastMCP("seo-data")
 
@@ -358,24 +365,103 @@ def seed_index(seeds: str, market: str = "us") -> dict:
     for seed in [s.strip() for s in seeds.split(",") if s.strip()]:
         queries.append(seed)
         queries.extend(_suggest(seed, market)[:5])  # a few real expansions per seed
-    seen, fetched, errors = set(), 0, 0
+    seen, fetched, errors, crawled = set(), 0, 0, 0
     for q in queries:
         if q in seen:
             continue
         seen.add(q)
         res = serp_lookup(q, market)
-        if res.get("status") == "success":
-            fetched += 1
-        else:
+        if res.get("status") != "success":
             errors += 1
+            continue
+        fetched += 1
+        # Self-build the link graph: crawl the top ranking pages (bounded).
+        for row in res.get("rows", [])[:3]:
+            if crawled < 30 and crawl_links(row["url"]).get("status") == "success":
+                crawled += 1
+    pr = compute_authority() if crawled else {"status": "empty"}
     comps = store.competitors_from_index(market, 10)
     return {"status": "success", "queries_fetched": fetched, "queries_failed": errors,
-            "top_competitors": comps, "index": store.stats()}
+            "pages_crawled": crawled, "authority": pr, "top_competitors": comps,
+            "index": store.stats()}
+
+
+@mcp.tool()
+def bootstrap_authority(urls: str, market: str = "us") -> dict:
+    """One-call authority: crawl a set of URLs (target + competitors), build the link
+    graph, run PageRank, and return the scores. No SearXNG needed — just URLs.
+
+    Args:
+        urls: Comma-separated URLs (the target site + a few competitor/niche pages).
+        market: Two-letter country/language code (unused; for interface parity).
+    """
+    url_list = [u.strip() for u in urls.split(",") if u.strip()]
+    if not url_list:
+        return {"status": "error", "reason": "Provide at least one URL."}
+    crawled = 0
+    for u in url_list:
+        if crawl_links(u).get("status") == "success":
+            crawled += 1
+    pr = compute_authority()
+    return {"status": "success", "urls_crawled": crawled, "pagerank": pr,
+            "index": store.stats()}
+
+
+@mcp.tool()
+def seed_common_crawl(release: str, max_domains: int = 50000,
+                      max_edges: int = 500000) -> dict:
+    """WEB-SCALE authority for free: stream Common Crawl's open domain graph into our
+    edge table (the same dataset Open PageRank uses), bounded by caps. Then run
+    compute_authority. Downloads from Common Crawl; heavy — start with small caps.
+
+    Args:
+        release: CC web-graph release id, e.g. 'cc-main-2024-feb-mar-apr'
+                 (verify current name at https://commoncrawl.org/web-graphs).
+        max_domains: Cap on vertices to load (top by centrality come first).
+        max_edges: Cap on edges to ingest.
+    """
+    base = f"https://data.commoncrawl.org/projects/hyperlinkgraph/{release}/domain"
+    vurl = f"{base}/{release}-domain-vertices.txt.gz"
+    eurl = f"{base}/{release}-domain-edges.txt.gz"
+    try:
+        id2dom: dict[int, str] = {}
+        with requests.get(vurl, stream=True, timeout=120) as r:
+            r.raise_for_status()
+            r.raw.decode_content = False
+            for raw in gzip.GzipFile(fileobj=r.raw):
+                parts = raw.decode("utf-8", "ignore").rstrip().split("\t")
+                if len(parts) >= 2:
+                    id2dom[int(parts[0])] = _cc_reverse_domain(parts[1])
+                if len(id2dom) >= max_domains:
+                    break
+        buf: dict[str, list[str]] = defaultdict(list)
+        added = 0
+        with requests.get(eurl, stream=True, timeout=300) as r:
+            r.raise_for_status()
+            r.raw.decode_content = False
+            for raw in gzip.GzipFile(fileobj=r.raw):
+                parts = raw.decode("utf-8", "ignore").rstrip().split("\t")
+                if len(parts) == 2:
+                    si, di = int(parts[0]), int(parts[1])
+                    if si in id2dom and di in id2dom:
+                        buf[id2dom[si]].append(id2dom[di])
+                        added += 1
+                        if added >= max_edges:
+                            break
+        for src, dsts in buf.items():
+            store.add_edges(src, dsts)
+        return {"status": "success", "vertices_loaded": len(id2dom),
+                "edges_added": added,
+                "note": "Now call compute_authority to score the web-scale graph."}
+    except Exception as e:
+        return {"status": "unavailable",
+                "reason": f"Common Crawl seed failed: {e}. Check the release id at "
+                "https://commoncrawl.org/web-graphs."}
 
 
 @mcp.tool()
 def index_stats() -> dict:
-    """Report how big our owned SEO index has grown (keywords/SERP rows/domains)."""
+    """Report how big our owned SEO index has grown (keywords/SERP/graph)."""
     return {"status": "success", **store.stats()}
 
 

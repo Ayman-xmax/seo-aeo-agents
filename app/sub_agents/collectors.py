@@ -154,9 +154,9 @@ def create_backlink() -> LlmAgent:
             must=[
                 "If Semrush is configured: profile backlinks + gap (DR>=50, dofollow, "
                 "min 1,000 monthly traffic, links all competitors have).",
-                "OWNED PATH (no paid API): crawl_links on the target site + a few "
-                "competitor/niche pages to build our link graph, then compute_authority "
-                "(local PageRank), then domain_authority + referring_domains to read the "
+                "OWNED PATH (no paid API): call bootstrap_authority with the target site "
+                "URL + a few competitor URLs (one step: crawls, builds the link graph, "
+                "runs PageRank). Then domain_authority + referring_domains for the "
                 "target's 0-100 authority and discovered backlinks.",
                 "FREE FALLBACK (no paid link index exists for backlinks): use "
                 "retrieve_knowledge to produce a grounded authority/link-building STRATEGY "
