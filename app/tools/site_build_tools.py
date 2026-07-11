@@ -26,8 +26,8 @@ except Exception:  # pragma: no cover
 _UA = "Mozilla/5.0 (compatible; SEO-AEO-Agent/1.0)"
 
 
-def _repo() -> str | None:
-    return os.environ.get("SITE_REPO_PATH")
+def _repo(tool_context: ToolContext) -> str | None:
+    return tool_context.state.get("site_repo_path") or os.environ.get("SITE_REPO_PATH")
 
 
 def generate_sitemap(base_url: str, tool_context: ToolContext) -> dict:
@@ -57,7 +57,7 @@ def generate_sitemap(base_url: str, tool_context: ToolContext) -> dict:
            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
            f"{body}\n</urlset>\n")
 
-    repo = _repo()
+    repo = _repo(tool_context)
     log = list(tool_context.state.get("change_log") or [])
     if repo:
         path = os.path.join(repo, "sitemap.xml")
@@ -79,7 +79,7 @@ def write_robots(sitemap_url: str, tool_context: ToolContext) -> dict:
         sitemap_url: Full sitemap URL, e.g. 'https://example.com/sitemap.xml'.
     """
     content = f"User-agent: *\nAllow: /\n\nSitemap: {sitemap_url}\n"
-    repo = _repo()
+    repo = _repo(tool_context)
     if repo:
         path = os.path.join(repo, "robots.txt")
         with open(path, "w", encoding="utf-8") as f:
@@ -115,7 +115,7 @@ def create_page(path: str, title: str, meta_description: str, heading: str,
         "</head>\n<body>\n"
         f"  <h1>{heading}</h1>\n{body_html}\n</body>\n</html>\n"
     )
-    repo = _repo()
+    repo = _repo(tool_context)
     log = list(tool_context.state.get("change_log") or [])
     if repo:
         full = os.path.join(repo, path)

@@ -20,6 +20,7 @@ from ..tools import (
     audit_links,
     audit_technical_basics,
     check_robots_and_sitemap,
+    commit_changes,
     compute_health_score,
     create_page,
     diff_scorecards,
@@ -79,6 +80,8 @@ def create_implementation() -> LlmAgent:
                 "declare it; create_page(...) for new content-brief pages.",
                 "Apply exactly the values from the approved action plan / draft — verbatim.",
                 "After publishing, use inspect_url to verify index/canonical status.",
+                "If a repo was cloned (state has site_repo_path), call commit_changes with a "
+                "clear message after applying, so the user gets a reviewable git commit.",
                 "Every write is recorded in change_log automatically.",
             ],
             must_not=[
@@ -92,7 +95,8 @@ def create_implementation() -> LlmAgent:
             skill_name="implementation",
             extra="APPROVED DRAFT:\n{draft_changes?}",
         ),
-        tools=[publish_change, generate_sitemap, write_robots, create_page, inspect_url],
+        tools=[publish_change, generate_sitemap, write_robots, create_page,
+               commit_changes, inspect_url],
         before_tool_callback=governance_before_tool,
         disallow_transfer_to_peers=True,
         output_key=S.CHANGE_LOG,

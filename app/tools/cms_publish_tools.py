@@ -55,11 +55,14 @@ class StaticSitePublisher(Publisher):
 
     platform = "static"
 
+    def __init__(self, repo_path: str | None = None):
+        # Prefer a repo provided in chat (session state) over the .env path.
+        self.repo_path = repo_path or os.environ.get("SITE_REPO_PATH")
+
     def _resolve(self, target: str) -> str | None:
-        repo = os.environ.get("SITE_REPO_PATH")
-        if not repo:
+        if not self.repo_path:
             return None
-        cand = target if os.path.isabs(target) else os.path.join(repo, target)
+        cand = target if os.path.isabs(target) else os.path.join(self.repo_path, target)
         return cand if os.path.isfile(cand) else None
 
     def _edit_head(self, path: str, field: str, value: str) -> bool:
@@ -160,10 +163,13 @@ class ShopifyPublisher(Publisher):
                 "reason": "Wire the Shopify Admin API call here."}
 
 
-def _get_publisher() -> Publisher:
+def _get_publisher(repo_path: str | None = None) -> Publisher:
     platform = (os.environ.get("CMS_PLATFORM") or "static").lower()
-    return {"webflow": WebflowPublisher, "shopify": ShopifyPublisher,
-            "static": StaticSitePublisher}.get(platform, StaticSitePublisher)()
+    if platform == "webflow":
+        return WebflowPublisher()
+    if platform == "shopify":
+        return ShopifyPublisher()
+    return StaticSitePublisher(repo_path)
 
 
 def publish_change(target: str, field: str, value: str, tool_context: ToolContext) -> dict:
@@ -179,7 +185,8 @@ def publish_change(target: str, field: str, value: str, tool_context: ToolContex
                'h1' | 'body' | ... .
         value: The new value / snippet.
     """
-    pub = _get_publisher()
+    repo_path = tool_context.state.get("site_repo_path") or os.environ.get("SITE_REPO_PATH")
+    pub = _get_publisher(repo_path)
     result = pub.apply(target, field, value)
     log = list(tool_context.state.get("change_log") or [])
     log.append({"target": target, "field": field, "value_preview": value[:200],

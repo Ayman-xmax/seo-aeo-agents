@@ -32,7 +32,7 @@ from .phases import (
     build_phase2_implement,
     build_phase3_verify,
 )
-from .tools import fetch_site_overview, semrush_status
+from .tools import clone_site_repo, fetch_site_overview, semrush_status
 
 
 def set_project_brief(niche: str, target_url: str, competitors: str, goals: str,
@@ -108,8 +108,11 @@ root_agent = LlmAgent(
             "Phase 1 ends by showing the user an ACTION PLAN. STOP and wait for their reply.",
             "When the user replies: if they name a section to focus on first, call "
             "set_focus(section). When they approve implementing, call set_phase('implement') "
-            "(and approve_publish(true) only if they also approve applying changes to the "
-            "site), then transfer to phase2_implement.",
+            "and approve_publish(true).",
+            "To edit the real site, the user can paste their repo URL in chat — call "
+            "clone_site_repo(repo_url) to fetch it (its files become the write target). If "
+            "they don't provide a repo, Phase 2 still produces a change-set + generated files.",
+            "After approval (and repo clone if given), transfer to phase2_implement.",
             "After implementation, call set_phase('verify') and transfer to "
             "phase3_verify to produce the before/after report.",
             "Keep the user in plain language; no SEO jargon dumps.",
@@ -123,7 +126,7 @@ root_agent = LlmAgent(
         skill_name="root_agent",
     ),
     tools=[fetch_site_overview, set_project_brief, set_phase, set_focus,
-           approve_publish, semrush_status],
+           approve_publish, clone_site_repo, semrush_status],
     sub_agents=[
         build_phase1_diagnose(),
         build_phase2_implement(),

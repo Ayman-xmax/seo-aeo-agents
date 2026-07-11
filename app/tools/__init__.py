@@ -19,6 +19,7 @@ from .ga4_tools import query_organic
 from .gsc_tools import inspect_url, search_analytics
 from .knowledge_retrieval import retrieve_knowledge
 from .pagespeed_crux_tools import get_crux, run_pagespeed
+from .repo_tools import clone_site_repo, commit_changes
 from .scoring_tools import compute_health_score, diff_scorecards
 from .semrush_mcp import build_semrush_toolset, semrush_status
 from .site_build_tools import create_page, generate_sitemap, write_robots
@@ -29,6 +30,8 @@ __all__ = [
     "audit_technical_basics",
     "build_semrush_toolset",
     "check_robots_and_sitemap",
+    "clone_site_repo",
+    "commit_changes",
     "compute_health_score",
     "create_page",
     "diff_scorecards",

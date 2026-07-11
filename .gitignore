@@ -209,5 +209,7 @@ app/knowledge_base/vector_store/
 seo_data_mcp/seo_index.db*
 # Per-run Phase-2 change-set output
 seo_changes/
+# Cloned site repos (provided in chat for Phase-2 editing)
+.site_repos/
 # Belt-and-suspenders: never commit the API-key env file
 app/.env
