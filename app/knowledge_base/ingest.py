@@ -17,16 +17,17 @@ import json
 import os
 import re
 
-from .. import config
-from ..embeddings import embed_texts
-
-# Standalone scripts don't get the ADK runtime's .env loading — do it ourselves.
+# Load .env BEFORE importing app modules — config reads env at import time, so the
+# provider/model/embedding choices must be present first.
 try:
     from dotenv import load_dotenv
 
     load_dotenv(os.path.join(os.path.dirname(__file__), os.pardir, ".env"))
 except Exception:
     pass
+
+from .. import config
+from ..embeddings import embed_texts
 
 
 def _chunk(text: str, target: int, overlap: int) -> list[str]:

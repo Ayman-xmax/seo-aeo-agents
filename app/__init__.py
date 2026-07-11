@@ -12,6 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
+# Load .env FIRST — config.py reads provider/model/embedding env at import time, so
+# it must be populated before any app submodule (agent, config) is imported. Uses
+# override=False, so exported vars and the ADK runtime's own .env load still win.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+except Exception:
+    pass
+
 from .agent import app
 
 __all__ = ["app"]
