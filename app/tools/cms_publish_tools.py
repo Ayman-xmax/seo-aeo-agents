@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 import re
 from abc import ABC, abstractmethod
+from typing import ClassVar
 
 from google.adk.tools.tool_context import ToolContext
 
@@ -141,6 +142,47 @@ class StaticSitePublisher(Publisher):
                 "field": field, "note": "Added to the change-set for review/apply."}
 
 
+class LaravelPublisher(Publisher):
+    """Updates a Laravel CMS's SEO record via the SeoAgentController endpoint.
+    Maps the agent's field names to the home_pages_seo_hero columns."""
+
+    platform = "laravel"
+    _MAP: ClassVar[dict[str, str]] = {
+        "seo_title": "meta_title", "title": "meta_title",
+        "meta_description": "meta_description", "meta_keywords": "meta_keywords",
+        "canonical": "canonical_url", "meta_robots": "robots",
+        "schema_jsonld": "structured_data",
+        "og_title": "og_title", "og_description": "og_description",
+        "twitter_title": "twitter_title", "twitter_description": "twitter_description",
+        "focus_keyword": "focus_keyword", "featured_image_alt": "featured_image_alt",
+    }
+
+    def apply(self, target: str, field: str, value: str) -> dict:
+        url = os.environ.get("LARAVEL_SEO_API_URL")
+        token = os.environ.get("SEO_AGENT_TOKEN")
+        if not url or not token:
+            return {"status": "not_configured",
+                    "reason": "Set LARAVEL_SEO_API_URL and SEO_AGENT_TOKEN (after merging the "
+                    "SeoAgentController branch and adding the token to your app's .env)."}
+        col = self._MAP.get(field)
+        if not col:
+            return {"status": "not_a_cms_seo_field",
+                    "reason": f"'{field}' isn't a CMS SEO column (e.g. h1/body are content, "
+                    "edited in the admin/Blade views) — use the change-set for those."}
+        try:
+            import requests
+
+            r = requests.patch(url, json={"slug": target or "home", col: value},
+                               headers={"X-SEO-Agent-Token": token,
+                                        "Accept": "application/json"}, timeout=20)
+            if r.status_code == 200:
+                return {"status": "applied_to_cms", "field": col, "response": r.json()}
+            return {"status": "error", "http_status": r.status_code,
+                    "reason": r.text[:200]}
+        except Exception as e:
+            return {"status": "unavailable", "reason": f"CMS call failed: {e}"}
+
+
 class WebflowPublisher(Publisher):
     platform = "webflow"
 
@@ -165,6 +207,8 @@ class ShopifyPublisher(Publisher):
 
 def _get_publisher(repo_path: str | None = None) -> Publisher:
     platform = (os.environ.get("CMS_PLATFORM") or "static").lower()
+    if platform == "laravel":
+        return LaravelPublisher()
     if platform == "webflow":
         return WebflowPublisher()
     if platform == "shopify":
