@@ -18,7 +18,7 @@ from .crawler_tools import (
 from .ga4_tools import query_organic
 from .gsc_tools import inspect_url, search_analytics
 from .knowledge_retrieval import retrieve_knowledge
-from .pagespeed_crux_tools import get_crux, run_pagespeed
+from .pagespeed_crux_tools import get_crux, run_lighthouse, run_pagespeed
 from .repo_tools import (
     clone_site_repo,
     commit_changes,
@@ -49,6 +49,7 @@ __all__ = [
     "query_organic",
     "replace_in_repo",
     "retrieve_knowledge",
+    "run_lighthouse",
     "run_pagespeed",
     "search_analytics",
     "semrush_status",

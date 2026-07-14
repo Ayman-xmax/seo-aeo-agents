@@ -9,7 +9,11 @@ API key is configured, so the agent reports honestly instead of guessing.
 
 from __future__ import annotations
 
+import json
 import os
+import shutil
+import subprocess
+import tempfile
 
 from .. import config
 
@@ -33,6 +37,79 @@ def _classify(metric: str, value: float) -> str:
     if metric == "CLS":
         return "good" if value <= good["CLS"] else "poor" if value > poor["CLS"] else "ni"
     return "unknown"
+
+
+def run_lighthouse(url: str, strategy: str) -> dict:
+    """Measure REAL lab Core Web Vitals locally with headless Chrome — no API key needed.
+
+    This is the ORGANIC path: we run Lighthouse ourselves instead of calling Google's
+    PageSpeed API. Returns LCP, CLS and TBT (the lab proxy for INP) plus the performance
+    score, each rated against Google's thresholds. Requires Node.js + Chrome (local).
+
+    Args:
+        url: The page to measure.
+        strategy: 'mobile' (what Google indexes) or 'desktop'.
+    """
+    if not url.startswith(("http://", "https://")):
+        return {"status": "error", "reason": "url must start with http:// or https://"}
+    npx = shutil.which("npx")
+    if not npx:
+        return {"status": "unavailable",
+                "reason": "Node.js/npx not found — install Node to measure CWV locally."}
+
+    outdir = tempfile.mkdtemp(prefix="lh_")
+    out = os.path.join(outdir, "lh.json")
+    cmd = [
+        npx, "-y", "lighthouse@12", url,
+        "--output=json", f"--output-path={out}", "--quiet",
+        "--only-categories=performance",
+        "--chrome-flags=--headless=new --no-sandbox --disable-gpu --ignore-certificate-errors",
+    ]
+    if strategy.lower().startswith("desk"):
+        cmd.append("--preset=desktop")
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=240,
+                              shell=(os.name == "nt"))
+        if not os.path.exists(out):
+            err = (proc.stderr or proc.stdout or "").strip()[:200]
+            return {"status": "unavailable",
+                    "reason": f"Lighthouse produced no report: {err or 'unknown error'}"}
+        with open(out, encoding="utf-8") as f:
+            data = json.load(f)
+    except subprocess.TimeoutExpired:
+        return {"status": "unavailable", "reason": "Lighthouse timed out (slow page)."}
+    except Exception as e:
+        return {"status": "unavailable", "reason": f"Lighthouse failed: {e}"}
+    finally:
+        shutil.rmtree(outdir, ignore_errors=True)
+
+    audits = data.get("audits", {})
+    perf = (data.get("categories", {}).get("performance", {}) or {}).get("score")
+    metrics: dict = {}
+    lcp_ms = audits.get("largest-contentful-paint", {}).get("numericValue")
+    if lcp_ms is not None:
+        lcp_s = round(float(lcp_ms) / 1000, 2)
+        metrics["LCP_S"] = {"value": lcp_s, "rating": _classify("LCP_S", lcp_s)}
+    cls = audits.get("cumulative-layout-shift", {}).get("numericValue")
+    if cls is not None:
+        metrics["CLS"] = {"value": round(float(cls), 3),
+                          "rating": _classify("CLS", float(cls))}
+    tbt = audits.get("total-blocking-time", {}).get("numericValue")
+    if tbt is not None:
+        tbt = round(float(tbt))
+        metrics["TBT_MS"] = {"value": tbt,
+                             "rating": "good" if tbt <= 200 else "poor" if tbt > 600 else "ni"}
+
+    return {
+        "status": "success",
+        "url": url,
+        "strategy": strategy,
+        "lab_performance_score": round(perf * 100) if perf is not None else None,
+        "metrics": metrics,
+        "source": "local_lighthouse",
+        "note": "Lab data measured locally with headless Chrome (no API key). TBT is the "
+                "lab proxy for INP; true INP/field data needs real users (CrUX, Google-only).",
+    }
 
 
 def run_pagespeed(url: str, strategy: str) -> dict:

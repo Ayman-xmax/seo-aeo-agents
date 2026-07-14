@@ -140,6 +140,7 @@ _HARVEST_TOOLS = {
     "check_robots_and_sitemap",
     "get_crux",
     "run_pagespeed",
+    "run_lighthouse",  # organic local CWV
     "inspect_url",
     "domain_authority",  # free Open PageRank -> feeds off-page score
 }

@@ -26,6 +26,7 @@ from ..tools import (
     get_crux,
     inspect_url,
     retrieve_knowledge,
+    run_lighthouse,
     run_pagespeed,
     semrush_status,
 )
@@ -88,7 +89,7 @@ def create_technical_audit() -> LlmAgent:
             must=[
                 "For each page: call audit_technical_basics, audit_links, and "
                 "audit_content; run check_robots_and_sitemap once for the site.",
-                "Use get_crux/run_pagespeed for Core Web Vitals where possible.",
+                "Measure Core Web Vitals with run_lighthouse(url, 'mobile') — it runs locally, needs no API key, and always works. get_crux/run_pagespeed are OPTIONAL extras that need a Google key; skip them if not configured.",
                 "Report each issue with the exact tool field it came from (evidence), AND "
                 "include the exact CURRENT title and meta description text per page (from "
                 "audit_technical_basics) so changes can be specified as current -> new.",
@@ -105,7 +106,8 @@ def create_technical_audit() -> LlmAgent:
             skill_name="technical_audit",
         ),
         tools=[audit_technical_basics, audit_links, audit_content,
-               check_robots_and_sitemap, get_crux, run_pagespeed, inspect_url],
+               check_robots_and_sitemap, run_lighthouse, get_crux, run_pagespeed,
+               inspect_url],
         output_key=S.TECH_REPORT,
         after_tool_callback=harvest_signals_after_tool,
     )

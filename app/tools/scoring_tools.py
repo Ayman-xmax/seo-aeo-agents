@@ -31,10 +31,12 @@ def _score_technical(sig: dict[str, list[dict]]) -> tuple[float | None, dict, li
     parts: list[float] = []
     detail: dict[str, float] = {}
     notes: list[str] = []
-    # Core Web Vitals from CrUX field data.
-    crux = [s for s in sig.get("get_crux", []) if s.get("status") == "success"]
+    # Core Web Vitals — from our local Lighthouse run (organic, no key) and/or CrUX
+    # field data when a Google key is configured. Both emit the same metrics shape.
+    cwv_entries = [s for key in ("run_lighthouse", "get_crux")
+                   for s in sig.get(key, []) if s.get("status") == "success"]
     ratings = []
-    for entry in crux:
+    for entry in cwv_entries:
         for _m, obj in (entry.get("metrics") or {}).items():
             r = obj.get("rating")
             ratings.append({"good": 100.0, "ni": 60.0, "poor": 20.0}.get(r, 50.0))
@@ -42,8 +44,13 @@ def _score_technical(sig: dict[str, list[dict]]) -> tuple[float | None, dict, li
         cwv = mean(ratings)
         parts.append(cwv)
         detail["core_web_vitals"] = round(cwv, 1)
+        if not any(s.get("source") == "local_lighthouse" for s in cwv_entries):
+            notes.append("CWV from CrUX field data.")
+        else:
+            notes.append("CWV measured locally with Lighthouse (lab). Real-user field data "
+                         "(CrUX/INP) is Google-only and optional.")
     else:
-        notes.append("No CrUX field data (set PAGESPEED_API_KEY) — CWV not scored.")
+        notes.append("CWV not measured — run_lighthouse needs Node.js + Chrome locally.")
     # robots/sitemap hygiene.
     rs = [s for s in sig.get("check_robots_and_sitemap", []) if s.get("status") == "success"]
     if rs:
