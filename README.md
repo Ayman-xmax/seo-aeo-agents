@@ -38,6 +38,30 @@ seo-agent/
 └── pyproject.toml
 ```
 
+## Run as a web app (React + FastAPI)
+Two processes — the FastAPI backend drives the agent, the React app is the UI.
+
+```bash
+# 1) backend (drives the ADK agent, streams events over SSE)
+uv run uvicorn api.main:api --reload --port 8080
+
+# 2) frontend (Vite dev server, proxies /api -> :8080)
+cd frontend && npm install && npm run dev
+```
+Open **http://localhost:5173** → paste your site URL → watch the agents work live →
+review the Health Score + Action Plan → approve (optionally paste a git repo URL) →
+see the changes applied.
+
+**API surface** (`api/main.py`):
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/session` | create a session |
+| `POST /api/chat` | send a message; streams agent events (SSE) |
+| `GET /api/state/{id}` | phase, brief, scorecard, action plan, change log |
+| `GET /api/health` | liveness |
+
+Production build: `cd frontend && npm run build` → serve `frontend/dist` behind the API.
+
 ## Expose it to other agents (A2A)
 The whole system is also an **A2A (Agent2Agent) service** — other agents can discover and
 call it as a standard remote agent:
