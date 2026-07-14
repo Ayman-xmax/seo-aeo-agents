@@ -38,6 +38,20 @@ seo-agent/
 └── pyproject.toml
 ```
 
+## Expose it to other agents (A2A)
+The whole system is also an **A2A (Agent2Agent) service** — other agents can discover and
+call it as a standard remote agent:
+```bash
+uv run uvicorn app.a2a_app:a2a_app --host 0.0.0.0 --port 8001
+# Agent Card: http://localhost:8001/.well-known/agent-card.json
+```
+Consume it from another ADK agent:
+```python
+from google.adk.agents.remote_a2a_agent import RemoteA2aAgent
+seo = RemoteA2aAgent(name="seo_agent",
+                     agent_card="http://localhost:8001/.well-known/agent-card.json")
+```
+
 ## Setup & run
 1. Put your Google AI Studio key in `app/.env` (`GOOGLE_API_KEY=...`). Optional
    integrations (Semrush MCP, PageSpeed, GSC, GA4, CMS) are documented in that file.
