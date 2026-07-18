@@ -37,9 +37,26 @@ except Exception:  # pragma: no cover
 
 
 def enable_langsmith() -> bool:
-    """Register the LiteLLM->LangSmith callback if a key is present. Safe no-op otherwise."""
+    """Enable LangSmith tracing if a key is present. Safe no-op otherwise.
+
+    Primary: native ADK tracing via OpenTelemetry (langsmith[google-adk]) — captures the
+    WHOLE agent tree (Gemini + OpenAI). Fallback: the LiteLLM callback (OpenAI path only).
+    """
     if not (os.environ.get("LANGSMITH_API_KEY") or os.environ.get("LANGCHAIN_API_KEY")):
         return False
+    os.environ.setdefault("LANGSMITH_PROJECT", "seo-aeo-agent")
+    os.environ.setdefault("LANGSMITH_TRACING", "true")
+
+    # Native ADK -> LangSmith via OpenTelemetry (best: full agent tree, all providers).
+    try:
+        from langsmith.integrations.otel import configure
+
+        configure()
+        return True
+    except Exception:
+        pass
+
+    # Fallback: LiteLLM callback (traces LLM calls on the OpenAI path only).
     try:
         import litellm
 
@@ -47,8 +64,6 @@ def enable_langsmith() -> bool:
         if "langsmith" not in current:
             current.append("langsmith")
             litellm.callbacks = current
-        os.environ.setdefault("LANGSMITH_PROJECT", "seo-aeo-agent")
-        os.environ.setdefault("LANGSMITH_TRACING", "true")
         return True
     except Exception:
         return False
