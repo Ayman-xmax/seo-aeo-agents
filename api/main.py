@@ -29,6 +29,7 @@ from pydantic import BaseModel
 
 # Importing app loads .env first (see app/__init__.py) and builds the agent tree.
 from app.agent import app as adk_app
+from app.observability import traceable
 
 USER_ID = "web"
 
@@ -72,30 +73,38 @@ async def create_session() -> dict:
     return {"session_id": sid}
 
 
+@traceable(run_type="chain", name="seo_agent_run")
+async def _drive(session_id: str, message: str):
+    """Drive the agent for one message, yielding parsed event dicts. Decorated with
+    @traceable so the ENTIRE run (every tool call + sub-agent + LLM call) is one nested
+    trace in LangSmith — no LangChain involved. No-op without LANGSMITH_API_KEY."""
+    msg = types.Content(role="user", parts=[types.Part(text=message)])
+    async for event in runner.run_async(
+        user_id=USER_ID, session_id=session_id, new_message=msg
+    ):
+        author = getattr(event, "author", "agent")
+        for call in event.get_function_calls() or []:
+            yield {"type": "tool_call", "agent": author, "tool": call.name}
+        for resp in event.get_function_responses() or []:
+            status = (resp.response or {}).get("status") if isinstance(
+                resp.response, dict) else None
+            yield {"type": "tool_result", "agent": author, "tool": resp.name,
+                   "status": status}
+        if event.content and event.content.parts:
+            text = "".join(p.text or "" for p in event.content.parts)
+            if text.strip():
+                yield {"type": "message", "agent": author, "text": text,
+                       "final": bool(event.is_final_response())}
+
+
 @api.post("/api/chat")
 async def chat(body: ChatIn) -> StreamingResponse:
     """Stream the agent's work (tool calls, messages) back as Server-Sent Events."""
 
     async def gen():
-        msg = types.Content(role="user", parts=[types.Part(text=body.message)])
         try:
-            async for event in runner.run_async(
-                user_id=USER_ID, session_id=body.session_id, new_message=msg
-            ):
-                author = getattr(event, "author", "agent")
-                for call in event.get_function_calls() or []:
-                    yield _sse({"type": "tool_call", "agent": author, "tool": call.name})
-                for resp in event.get_function_responses() or []:
-                    status = (resp.response or {}).get("status") if isinstance(
-                        resp.response, dict
-                    ) else None
-                    yield _sse({"type": "tool_result", "agent": author,
-                                "tool": resp.name, "status": status})
-                if event.content and event.content.parts:
-                    text = "".join(p.text or "" for p in event.content.parts)
-                    if text.strip():
-                        yield _sse({"type": "message", "agent": author, "text": text,
-                                    "final": bool(event.is_final_response())})
+            async for ev in _drive(body.session_id, body.message):
+                yield _sse(ev)
             yield _sse({"type": "done"})
         except Exception as e:  # surface errors to the UI instead of a dead stream
             yield _sse({"type": "error", "message": str(e)[:600]})

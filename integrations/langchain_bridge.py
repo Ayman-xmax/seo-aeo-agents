@@ -32,7 +32,9 @@ def run_seo_phase1(url: str) -> dict:
     from google.genai import types
 
     from app.agent import app as adk_app
+    from app.observability import traceable
 
+    @traceable(run_type="chain", name="seo_phase1")
     async def _go() -> dict:
         sessions = InMemorySessionService()
         runner = Runner(app=adk_app, session_service=sessions,

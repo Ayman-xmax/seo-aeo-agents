@@ -29,6 +29,7 @@ import time
 # app/__init__ loads .env before config reads it.
 from app import config
 from app.agent import app as adk_app
+from app.observability import traceable
 from eval.graders import grade_run
 
 _HERE = os.path.dirname(__file__)
@@ -41,8 +42,10 @@ def _load_cases() -> list[dict]:
         return yaml.safe_load(f).get("cases", [])
 
 
+@traceable(run_type="chain", name="seo_eval_case")
 async def _run_case(case: dict) -> tuple[list[dict], dict]:
-    """Run one case through the agent; return (trace, final_state)."""
+    """Run one case through the agent; return (trace, final_state). Traced so each
+    eval case is one nested run in LangSmith (when LANGSMITH_API_KEY is set)."""
     from google.adk.artifacts import InMemoryArtifactService
     from google.adk.runners import Runner
     from google.adk.sessions import InMemorySessionService
