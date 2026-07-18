@@ -87,6 +87,9 @@ def create_implementation() -> LlmAgent:
                 "For ADDING things: create_page(...) for new pages; generate_sitemap(base_url) "
                 "+ write_robots(sitemap_url) for the sitemap; publish_change for schema/meta "
                 "insertion in static HTML.",
+                "For NEW CONTENT in state['drafted_content'] (full articles the writer "
+                "produced): create_page(path, title, meta_description, heading, body_html) "
+                "for each — then add them to the sitemap.",
                 "Apply exactly the values from the approved action plan / draft — verbatim.",
                 "If a repo was cloned (state has site_repo_path): changes are written to the "
                 "real files (result 'applied_to_file') on the 'seo-agent-optimizations' "
@@ -111,7 +114,8 @@ def create_implementation() -> LlmAgent:
             ],
             if_unsure="Stop and ask for human confirmation before publishing.",
             skill_name="implementation",
-            extra="APPROVED DRAFT:\n{draft_changes?}",
+            extra="APPROVED ON-PAGE DRAFT:\n{draft_changes?}\n\n"
+            "NEW CONTENT TO PUBLISH (create_page each):\n{drafted_content?}",
         ),
         tools=[replace_in_repo, publish_change, generate_sitemap, write_robots,
                create_page, commit_changes, push_changes, inspect_url],

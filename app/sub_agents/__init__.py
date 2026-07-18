@@ -21,6 +21,7 @@ from .execution import (
 from .strategy import (
     create_action_plan,
     create_content_optimizer,
+    create_content_writer,
     create_critic,
     create_strategy_synthesizer,
 )
@@ -31,6 +32,7 @@ __all__ = [
     "create_backlink",
     "create_competitor_discovery",
     "create_content_optimizer",
+    "create_content_writer",
     "create_critic",
     "create_implementation",
     "create_improvement_reporter",

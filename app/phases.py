@@ -68,10 +68,11 @@ def build_phase2_implement() -> SequentialAgent:
     )
     return SequentialAgent(
         name="phase2_implement",
-        description="PHASE 2 — IMPLEMENT (gated writes): refine the drafted changes, "
-        "then apply the approved ones to the CMS and verify indexing.",
+        description="PHASE 2 — IMPLEMENT (gated writes): refine on-page changes, write new "
+        "content for the top briefs, then apply the approved work and verify.",
         sub_agents=[
             refine_loop,
+            sa.create_content_writer(),   # full articles for the top content briefs
             sa.create_implementation(),
         ],
     )

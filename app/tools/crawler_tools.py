@@ -434,6 +434,9 @@ def audit_site(url: str, tool_context: ToolContext) -> dict:
         sig["audit_content"] = (sig.get("audit_content") or []) + content_sig
         tool_context.state["signals"] = sig
         tool_context.state["page_inventory"] = [p["url"] for p in pages]
+        # url+title so the content writer can add real internal links.
+        tool_context.state["site_pages"] = [
+            {"url": p["url"], "title": p["title"]} for p in pages]
 
     summary = {
         "pages_audited": len(pages),

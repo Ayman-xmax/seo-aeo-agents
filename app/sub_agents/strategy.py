@@ -156,6 +156,46 @@ def create_content_optimizer() -> LlmAgent:
     )
 
 
+def create_content_writer() -> LlmAgent:
+    return LlmAgent(
+        name="content_writer",
+        model=build_model(SYNTH_MODEL),
+        description="Writes full, publish-ready, SEO+AEO-optimized articles/pages from briefs.",
+        instruction=contract(
+            role="Write full, publish-ready, SEO+AEO-optimized content for the highest-"
+            "priority content briefs — the biggest ranking lever.",
+            must=[
+                "Work from the content_briefs in state['strategy'] and the approved action "
+                "plan. Write the TOP 1-3 pieces at high quality — do NOT attempt all at once.",
+                "Each piece: SEO title (~55 chars, keyword-first), meta (~155), exactly one "
+                "H1, question-shaped H2/H3, and a comprehensive, intent-matched body "
+                "(aim 800-1500 words) that genuinely answers the topic.",
+                "Lead key sections with a 40-60 word direct ANSWER block (AEO), and include "
+                "valid Article (and FAQPage if Q&A) JSON-LD.",
+                "Add 2-5 contextual INTERNAL links to the most relevant existing pages from "
+                "the SITE PAGES list, with descriptive anchors (real internal linking).",
+                "Use retrieve_knowledge to follow current best practice; write real, specific "
+                "content. Output each piece as: suggested path (e.g. what-is-x.html), title, "
+                "meta_description, h1, body_html (with the internal <a> links + answer "
+                "blocks), schema_jsonld.",
+            ],
+            must_not=[
+                "Publish or modify the live site (implementation does that, gated).",
+                "Invent facts about the business, fake statistics, or fake citations.",
+                "Produce thin/generic filler or placeholders — depth + intent match are the point.",
+            ],
+            if_unsure="Write fewer pieces at higher quality; flag anything that needs the "
+            "client's real facts (prices, case studies) instead of inventing them.",
+            skill_name="content_writer",
+            extra="CONTENT BRIEFS + STRATEGY:\n{strategy?}\n\nAPPROVED PLAN:\n{action_plan?}"
+            "\n\nSITE PAGES (for internal links):\n{site_pages?}\n\nKEYWORDS:\n{keyword_report?}",
+        ),
+        tools=[retrieve_knowledge],
+        before_tool_callback=governance_before_tool,
+        output_key="drafted_content",
+    )
+
+
 def create_critic() -> LlmAgent:
     return LlmAgent(
         name="critic",
