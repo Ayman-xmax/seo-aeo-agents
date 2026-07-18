@@ -26,6 +26,7 @@ from ..tools import (
     diff_scorecards,
     generate_sitemap,
     get_crux,
+    gsc_opportunities,
     inspect_url,
     publish_change,
     push_changes,
@@ -187,17 +188,22 @@ def create_monitoring() -> LlmAgent:
         instruction=contract(
             role="Report current organic performance and set up ongoing tracking.",
             must=[
-                "Pull GSC Search Analytics, GA4 organic engagement, and CrUX where creds exist.",
+                "Call gsc_opportunities(site_url, 28) for REAL rankings/clicks; compare its "
+                "totals to state['gsc_baseline'] (from Phase 1) for a genuine before/after "
+                "when both exist.",
+                "Also pull GA4 organic engagement and CrUX where creds exist.",
                 "Report only tool-returned metrics; name unavailable sources.",
-                "Recommend a re-audit cadence and the AI share-of-voice prompt panel.",
+                "Be honest: ranking/traffic change takes weeks — a same-day re-pull confirms "
+                "changes are live, not that rankings moved. Recommend a re-audit cadence.",
             ],
             must_not=[
                 "Fabricate rankings, sessions, or citation metrics.",
+                "Claim rankings improved from a same-day GSC pull.",
             ],
             if_unsure="Mark the metric source 'not_configured' and continue.",
             skill_name="monitoring",
         ),
-        tools=[search_analytics, query_organic, get_crux, inspect_url],
+        tools=[gsc_opportunities, search_analytics, query_organic, get_crux, inspect_url],
         before_tool_callback=governance_before_tool,
         after_tool_callback=harvest_signals_after_tool,
         disallow_transfer_to_peers=True,

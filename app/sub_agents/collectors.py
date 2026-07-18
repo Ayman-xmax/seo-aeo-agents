@@ -25,6 +25,7 @@ from ..tools import (
     check_robots_and_sitemap,
     fetch_site_overview,
     get_crux,
+    gsc_opportunities,
     inspect_url,
     retrieve_knowledge,
     run_lighthouse,
@@ -119,22 +120,24 @@ def create_technical_audit() -> LlmAgent:
 def create_keyword_research() -> LlmAgent:
     semrush = build_semrush_toolset(["keyword_research", "organic_research"])
     local = build_local_seo_mcp()
-    tools = [semrush_status] + ([local] if local else []) + ([semrush] if semrush else [])
+    tools = ([semrush_status, gsc_opportunities]
+             + ([local] if local else []) + ([semrush] if semrush else []))
     return _leaf(
         name="keyword_research",
         model=build_model(WORKER_MODEL),
-        description="Researches keywords (free autocomplete + optional Semrush) and clusters them by intent.",
+        description="Researches keywords + REAL Search Console opportunities; clusters by intent.",
         instruction=contract(
-            role="Research keywords for the niche and cluster them by search intent "
-            "for the target site.",
+            role="Research keywords for the niche AND surface the site's real ranking "
+            "opportunities, then cluster by intent.",
             must=[
-                "FREE PATH (no subscription): use keyword_ideas and question_keywords to "
-                "generate a large list of REAL search queries from seed topics; use "
-                "autocomplete to refine.",
-                "Group keywords into intent-based clusters and map each cluster to a "
-                "target URL to avoid cannibalization.",
-                "If Semrush is configured, enrich clusters with its volume/difficulty/gap "
-                "data; otherwise cluster on the free query lists WITHOUT volumes.",
+                "REAL DATA FIRST: call gsc_opportunities(site_url, 28) — if configured, it "
+                "returns striking-distance keywords (pos 5-20 = one push from page 1) and "
+                "low-CTR pages (good rank, few clicks = title/meta rewrite). PRIORITIZE these "
+                "— they are the highest-ROI, evidence-based wins. If not_configured, say so.",
+                "FREE PATH: use keyword_ideas and question_keywords for the niche's query "
+                "universe; autocomplete to refine.",
+                "Group keywords into intent-based clusters and map each to a target URL.",
+                "If Semrush is configured, enrich with its volume/difficulty/gap data.",
                 "Report volumes/difficulty ONLY when a tool returned them.",
             ],
             must_not=[

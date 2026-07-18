@@ -23,6 +23,7 @@ dependencies = [
     "litellm>=1.50.0",         # OpenAI / non-Gemini models via ADK LiteLlm
     "openai>=1.40.0",          # OpenAI provider (LLM + embeddings)
     "langsmith>=0.1.0",        # observability/tracing for the OpenAI path (via LiteLLM)
+    "google-api-python-client>=2.100.0",  # Google Search Console (real rankings/clicks)
 ]
 requires-python = ">=3.11,<3.14"
 

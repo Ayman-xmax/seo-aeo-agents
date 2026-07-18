@@ -137,6 +137,8 @@ async def get_state(session_id: str) -> dict:
         "change_log": st.get("change_log") or [],
         "site_repo_path": st.get("site_repo_path"),
         "site_type": st.get("site_type"),
+        "page_inventory": st.get("page_inventory") or [],
+        "gsc_baseline": st.get("gsc_baseline"),  # real rankings/clicks baseline (if GSC set)
         "publish_approved": bool(st.get("publish_approved")),
     }
 

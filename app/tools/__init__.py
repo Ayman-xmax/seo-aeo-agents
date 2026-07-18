@@ -17,7 +17,7 @@ from .crawler_tools import (
     fetch_site_overview,
 )
 from .ga4_tools import query_organic
-from .gsc_tools import inspect_url, search_analytics
+from .gsc_tools import gsc_opportunities, inspect_url, search_analytics
 from .knowledge_retrieval import retrieve_knowledge
 from .pagespeed_crux_tools import get_crux, run_lighthouse, run_pagespeed
 from .repo_tools import (
@@ -45,6 +45,7 @@ __all__ = [
     "fetch_site_overview",
     "generate_sitemap",
     "get_crux",
+    "gsc_opportunities",
     "inspect_url",
     "publish_change",
     "push_changes",
