@@ -105,6 +105,7 @@ SITEMAP_MAX_BYTES = 50 * 1024 * 1024          # 50 MB uncompressed
 ROBOTS_MAX_BYTES = 500 * 1024                 # 500 KiB (rest ignored)
 MAX_LINKS_PER_PAGE = 150
 MAX_CLICK_DEPTH = 3
+SITE_CRAWL_MAX_PAGES = int(os.environ.get("SEO_SITE_MAX_PAGES", "25"))  # site-wide audit cap
 
 # Core Web Vitals "good" bands (75th percentile field data).
 CWV_GOOD = {"LCP_S": 2.5, "INP_MS": 200, "CLS": 0.1}

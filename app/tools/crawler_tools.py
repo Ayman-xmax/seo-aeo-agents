@@ -13,6 +13,8 @@ import json
 import re
 from urllib.parse import urljoin, urlparse
 
+from google.adk.tools.tool_context import ToolContext
+
 from .. import config
 
 try:  # optional deps kept guarded so the agent tree always imports
@@ -262,6 +264,191 @@ def fetch_site_overview(url: str) -> dict:
         "h2": h2,
         "text_excerpt": text[:1800],
     }
+
+
+_SKIP_EXT = re.compile(r"\.(jpg|jpeg|png|gif|svg|webp|ico|css|js|pdf|zip|woff2?|mp4|xml)$", re.I)
+
+
+def _sitemap_urls(base_url: str) -> list[str]:
+    """Best-effort: pull page URLs from /sitemap.xml (and sitemap indexes)."""
+    if not _DEPS:
+        return []
+    parsed = urlparse(base_url)
+    root = f"{parsed.scheme}://{parsed.netloc}"
+    found: list[str] = []
+    try:
+        for sm in (urljoin(root, "/sitemap.xml"), urljoin(root, "/sitemap_index.xml")):
+            r = requests.get(sm, headers={"User-Agent": _UA}, timeout=_TIMEOUT)
+            if r.status_code != 200:
+                continue
+            locs = re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", r.text)
+            # if it's a sitemap index, follow child sitemaps (bounded)
+            children = [u for u in locs if u.endswith(".xml")]
+            for child in children[:5]:
+                try:
+                    cr = requests.get(child, headers={"User-Agent": _UA}, timeout=_TIMEOUT)
+                    found += re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", cr.text)
+                except Exception:
+                    pass
+            found += [u for u in locs if not u.endswith(".xml")]
+            if found:
+                break
+    except Exception:
+        return []
+    return [u for u in found if u.startswith("http") and not _SKIP_EXT.search(u)]
+
+
+def _audit_page_from_soup(url: str, soup) -> dict:
+    """Compute the on-page signals for ONE already-parsed page (title/meta/h1/canonical/
+    schema, link issues, content depth) — same rules as the single-page tools, one fetch."""
+    title = soup.title.get_text(strip=True) if soup.title else ""
+    desc_el = soup.find("meta", attrs={"name": "description"})
+    desc = desc_el.get("content", "").strip() if desc_el else ""
+    h1s = soup.find_all("h1")
+    canonical = soup.find("link", attrs={"rel": "canonical"})
+    canonical_href = canonical.get("href") if canonical else None
+
+    basic_findings: list[str] = []
+    if not title:
+        basic_findings.append("missing_title")
+    elif len(title) > config.TITLE_CHARS["max"]:
+        basic_findings.append(f"title_too_long:{len(title)}chars")
+    elif len(title) < config.TITLE_CHARS["min"]:
+        basic_findings.append(f"title_too_short:{len(title)}chars")
+    if not desc:
+        basic_findings.append("missing_meta_description")
+    elif len(desc) > config.META_CHARS["max"]:
+        basic_findings.append(f"meta_desc_too_long:{len(desc)}chars")
+    if len(h1s) == 0:
+        basic_findings.append("missing_h1")
+    elif len(h1s) > 1:
+        basic_findings.append(f"multiple_h1:{len(h1s)}")
+    if canonical_href and not urlparse(canonical_href).netloc:
+        basic_findings.append("relative_canonical_url")
+
+    schema_types: list[str] = []
+    for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        try:
+            data = json.loads(script.string or "{}")
+        except Exception:
+            continue
+        for b in (data if isinstance(data, list) else [data]):
+            t = b.get("@type") if isinstance(b, dict) else None
+            if isinstance(t, str):
+                schema_types.append(t)
+
+    # link issues (compact — scoring only needs issue_count + over_link_limit)
+    issues = 0
+    total_links = 0
+    for a in soup.find_all("a"):
+        href = a.get("href")
+        text = a.get_text(strip=True)
+        if href is None or _JS_HREF.match(href or ""):
+            issues += 1
+            continue
+        total_links += 1
+        if text.lower() in _GENERIC_ANCHORS:
+            issues += 1
+        img = a.find("img")
+        if not text and img is not None and not img.get("alt"):
+            issues += 1
+
+    # content depth
+    body = BeautifulSoup(str(soup), "lxml")
+    for tag in body(["script", "style", "noscript", "template"]):
+        tag.decompose()
+    words = len(body.get_text(" ", strip=True).split())
+    content_findings: list[str] = []
+    if words < 300:
+        content_findings.append(f"thin_content:{words}words")
+    elif words < 600:
+        content_findings.append(f"shallow_content:{words}words")
+
+    return {
+        "url": url, "title": title, "title_len": len(title),
+        "meta_description": desc, "meta_len": len(desc), "h1_count": len(h1s),
+        "canonical": canonical_href, "schema_types": schema_types,
+        "word_count": words, "link_issues": issues, "total_links": total_links,
+        "findings": basic_findings + content_findings,
+    }
+
+
+def audit_site(url: str, tool_context: ToolContext) -> dict:
+    """Crawl the WHOLE site (sitemap + internal-link BFS, bounded) and audit EVERY page.
+
+    This is the site-wide inventory: it finds every page, audits each (title/meta/H1/
+    canonical/schema, link hygiene, content depth), and writes per-page signals so the
+    Health Score reflects the whole site, not just the homepage. Returns per-page issues
+    plus a site-level summary. Call this ONCE per site.
+
+    Args:
+        url: The site root URL.
+    """
+    if not _DEPS:
+        return {"status": "unavailable", "reason": "requests/bs4 not installed"}
+    from collections import deque
+
+    parsed = urlparse(url)
+    host = parsed.netloc
+    start = f"{parsed.scheme}://{host}/"
+    seen = {start}
+    queue = deque([start])
+    for u in _sitemap_urls(url):
+        if urlparse(u).netloc == host and u not in seen:
+            seen.add(u)
+            queue.append(u)
+
+    pages: list[dict] = []
+    basics_sig, links_sig, content_sig = [], [], []
+    max_pages = config.SITE_CRAWL_MAX_PAGES
+
+    while queue and len(pages) < max_pages:
+        page_url = queue.popleft()
+        html, meta = _fetch(page_url)
+        if html is None:
+            continue
+        soup = BeautifulSoup(html, "lxml")
+        audit = _audit_page_from_soup(meta.get("final_url", page_url), soup)
+        pages.append(audit)
+        # signal shapes the scorer already aggregates (per page -> whole-site score)
+        basics_sig.append({"status": "success", "findings": [f for f in audit["findings"]
+                           if not f.startswith(("thin_content", "shallow_content"))],
+                           "schema_types": audit["schema_types"]})
+        links_sig.append({"status": "success", "issue_count": audit["link_issues"],
+                          "over_link_limit": audit["total_links"] > config.MAX_LINKS_PER_PAGE})
+        content_sig.append({"status": "success", "word_count": audit["word_count"],
+                            "findings": [f for f in audit["findings"]
+                                         if f.startswith(("thin_content", "shallow_content"))]})
+        # discover more internal pages
+        for a in soup.find_all("a", href=True):
+            full = urljoin(page_url, a["href"]).split("#")[0].split("?")[0]
+            if (full.startswith("http") and urlparse(full).netloc == host
+                    and full not in seen and not _SKIP_EXT.search(full)):
+                seen.add(full)
+                queue.append(full)
+
+    if tool_context is not None:
+        sig = dict(tool_context.state.get("signals") or {})
+        sig["audit_technical_basics"] = (sig.get("audit_technical_basics") or []) + basics_sig
+        sig["audit_links"] = (sig.get("audit_links") or []) + links_sig
+        sig["audit_content"] = (sig.get("audit_content") or []) + content_sig
+        tool_context.state["signals"] = sig
+        tool_context.state["page_inventory"] = [p["url"] for p in pages]
+
+    summary = {
+        "pages_audited": len(pages),
+        "discovered_but_uncrawled": max(0, len(seen) - len(pages)),
+        "missing_title": sum(1 for p in pages if "missing_title" in p["findings"]),
+        "missing_meta": sum(1 for p in pages if "missing_meta_description" in p["findings"]),
+        "missing_h1": sum(1 for p in pages if "missing_h1" in p["findings"]),
+        "thin_pages": sum(1 for p in pages
+                          if any(f.startswith("thin_content") for f in p["findings"])),
+        "total_link_issues": sum(p["link_issues"] for p in pages),
+        "pages_with_schema": sum(1 for p in pages if p["schema_types"]),
+    }
+    return {"status": "success", "site": host, "summary": summary,
+            "pages": [{"url": p["url"], "title": p["title"], "word_count": p["word_count"],
+                       "findings": p["findings"]} for p in pages]}
 
 
 def audit_content(url: str) -> dict:

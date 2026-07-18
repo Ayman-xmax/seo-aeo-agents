@@ -20,6 +20,7 @@ from ..guardrails import (
 from ..tools import (
     audit_content,
     audit_links,
+    audit_site,
     audit_technical_basics,
     check_robots_and_sitemap,
     fetch_site_overview,
@@ -85,17 +86,19 @@ def create_technical_audit() -> LlmAgent:
         description="Audits technical + on-page SEO: crawlability, CWV, robots/sitemap, "
         "canonical, schema, and crawlable-link/anchor hygiene.",
         instruction=contract(
-            role="Run a technical + on-page SEO audit of the target site's key pages.",
+            role="Run a technical + on-page SEO audit of the WHOLE target site.",
             must=[
-                "For each page: call audit_technical_basics, audit_links, and "
-                "audit_content; run check_robots_and_sitemap once for the site.",
-                "Measure Core Web Vitals with run_lighthouse(url, 'mobile') — it runs locally, needs no API key, and always works. get_crux/run_pagespeed are OPTIONAL extras that need a Google key; skip them if not configured.",
-                "Report each issue with the exact tool field it came from (evidence), AND "
-                "include the exact CURRENT title and meta description text per page (from "
-                "audit_technical_basics) so changes can be specified as current -> new.",
-                "Apply the crawlable-link rules literally: flag non-anchor href, "
-                "onclick-only, javascript: hrefs, generic/stuffed anchors, missing "
-                "alt/title, chained links, and >150 links/page.",
+                "Call audit_site(target_url) ONCE — it inventories and audits EVERY page "
+                "(titles/meta/H1/canonical/schema, link hygiene, content depth) and feeds "
+                "the site-wide score. This is the primary step: do NOT audit just the homepage.",
+                "Report the site summary (pages audited, how many missing title/meta/H1, "
+                "thin pages, total link issues) AND list the specific pages with issues, "
+                "each with its exact current title/meta so fixes can be specified per page.",
+                "Run check_robots_and_sitemap once, and run_lighthouse(homepage, 'mobile') "
+                "for Core Web Vitals (local, no key). get_crux/run_pagespeed are optional "
+                "Google-key extras — skip if not configured.",
+                "For deep detail on one page, audit_technical_basics/audit_links/"
+                "audit_content are available as follow-ups.",
             ],
             must_not=[
                 "Estimate Core Web Vitals or page counts.",
@@ -105,7 +108,7 @@ def create_technical_audit() -> LlmAgent:
             if_unsure="Mark the specific check 'unavailable' and continue.",
             skill_name="technical_audit",
         ),
-        tools=[audit_technical_basics, audit_links, audit_content,
+        tools=[audit_site, audit_technical_basics, audit_links, audit_content,
                check_robots_and_sitemap, run_lighthouse, get_crux, run_pagespeed,
                inspect_url],
         output_key=S.TECH_REPORT,

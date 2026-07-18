@@ -48,8 +48,12 @@ def create_strategy_synthesizer() -> LlmAgent:
                 "Use retrieve_knowledge to ground recommendations in best-practice "
                 "guidance and cite the source.",
                 "Every finding must reference the report/field it came from.",
+                "The technical report covers the WHOLE site (many pages). Organize "
+                "on-page/content fixes PER PAGE using that page list — not just the "
+                "homepage. Prioritize the pages with the most/most-severe issues.",
                 "Output JSON matching the StrategyRoadmap shape: summary, findings[], "
-                "roadmap[] (priority-ordered), content_briefs[], unavailable_data[].",
+                "roadmap[] (priority-ordered, with target_urls per item), content_briefs[], "
+                "unavailable_data[].",
                 "List every check that could not run under unavailable_data.",
             ],
             must_not=[

@@ -11,6 +11,7 @@ from .cms_publish_tools import publish_change
 from .crawler_tools import (
     audit_content,
     audit_links,
+    audit_site,
     audit_technical_basics,
     check_robots_and_sitemap,
     fetch_site_overview,
@@ -32,6 +33,7 @@ from .site_build_tools import create_page, generate_sitemap, write_robots
 __all__ = [
     "audit_content",
     "audit_links",
+    "audit_site",
     "audit_technical_basics",
     "build_semrush_toolset",
     "check_robots_and_sitemap",

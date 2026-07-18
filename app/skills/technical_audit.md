@@ -5,13 +5,13 @@ Produce a ground-truth technical/on-page audit of the site's key pages. Every is
 must cite the exact tool field it came from.
 
 ## Procedure (tool order)
-1. check_robots_and_sitemap(url) ONCE for the site — get declared sitemaps, robots size.
-2. For each key page (homepage + 3-8 important URLs from the brief):
-   a. audit_technical_basics(url) — title/meta length, single H1, canonical, meta-robots,
-      JSON-LD types (flag deprecated FAQ/HowTo).
-   b. audit_links(url) — apply Google's crawlable-link rules literally.
-   c. audit_content(url) — word count / thin-content, heading structure, extractable
-      formatting (feeds the Content/Keyword score).
+1. audit_site(target_url) ONCE — inventories + audits the WHOLE site (every page:
+   title/meta/H1/canonical/schema, link hygiene, content depth) and feeds the site-wide
+   score. This is the main step. Report the summary + the specific pages with issues.
+2. check_robots_and_sitemap(url) ONCE — declared sitemaps, robots size.
+3. run_lighthouse(homepage, 'mobile') — Core Web Vitals (local, no key).
+4. Follow-up on a single page only if it needs detail: audit_technical_basics / audit_links
+   / audit_content.
 3. get_crux(url) for field Core Web Vitals; run_pagespeed(url, 'mobile') for lab diagnostics
    on any page CrUX can't cover. Mobile first — Google indexes the mobile version.
 4. inspect_url(page_url, site_url) to confirm index status where a GSC property is configured.
