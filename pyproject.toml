@@ -22,6 +22,7 @@ dependencies = [
     "pyyaml>=6.0",             # knowledge corpus versions.yaml
     "litellm>=1.50.0",         # OpenAI / non-Gemini models via ADK LiteLlm
     "openai>=1.40.0",          # OpenAI provider (LLM + embeddings)
+    "langsmith>=0.1.0",        # observability/tracing for the OpenAI path (via LiteLLM)
 ]
 requires-python = ">=3.11,<3.14"
 
@@ -37,6 +38,12 @@ dev = [
 eval = [
     "google-adk[eval]>=2.0.0,<3.0.0",
     "google-cloud-aiplatform[evaluation]>=1.156.0",
+]
+# Heavy LangChain stack — only needed to run the DeepAgents bridge (integrations/).
+langchain = [
+    "langchain>=0.3.0",
+    "langchain-openai>=0.2.0",
+    "deepagents>=0.0.5",
 ]
 lint = [
     "ruff>=0.4.6,<1.0.0",

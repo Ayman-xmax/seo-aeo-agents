@@ -24,6 +24,14 @@ try:
 except Exception:
     pass
 
+# Optional LangSmith tracing (no-op unless LANGSMITH_API_KEY is set).
+try:
+    from .observability import enable_langsmith
+
+    enable_langsmith()
+except Exception:
+    pass
+
 from .agent import app
 
 __all__ = ["app"]

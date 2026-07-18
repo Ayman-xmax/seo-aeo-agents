@@ -1,0 +1,14 @@
+# Model-evaluation cases. Each runs Phase 1 on a site and is graded by eval/graders.py.
+# Keep sites small/fast; the run does a real crawl + Lighthouse per page.
+cases:
+  - id: static_simple
+    url: https://example.com
+    prompt: "Analyze https://example.com and run the Phase 1 diagnosis. I approve."
+
+  - id: docs_site
+    url: https://www.python.org/
+    prompt: "Analyze https://www.python.org/ and run the Phase 1 diagnosis. I approve."
+
+  - id: framework_site
+    url: https://astro.build/
+    prompt: "Analyze https://astro.build/ and run the Phase 1 diagnosis. I approve."
