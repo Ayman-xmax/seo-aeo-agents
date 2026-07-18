@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Ruff lint
+        run: uvx ruff check app/ api/ eval/ integrations/ seo_data_mcp/
+
+      - name: Agent tree imports (smoke)
+        run: uv run python -c "from app.agent import root_agent; print('tree OK', root_agent.name)"
+
+      - name: Eval self-check (grading logic, offline)
+        run: uv run python -m eval.selfcheck
+
+      - name: Frontend build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+  # Optional model-quality gate — runs only if an OpenAI key secret is configured.
+  # Does real Phase-1 runs, so it's slow; keep it off PRs from forks.
+  eval-gate:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' }}
+    needs: lint-and-build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv python install 3.12
+      - run: uv sync --frozen
+
+      - name: Run model eval (skipped without OPENAI_API_KEY)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SEO_LLM_PROVIDER: openai
+          SEO_WORKER_MODEL: openai/gpt-4o-mini
+          SEO_ROUTER_MODEL: openai/gpt-4o-mini
+          SEO_SYNTH_MODEL: openai/gpt-4o-mini
+          SEO_EVAL_MIN_SCORE: "0.6"
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "No OPENAI_API_KEY secret — skipping live eval gate."; exit 0
+          fi
+          uv run python -m eval.gate

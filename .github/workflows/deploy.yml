@@ -1,0 +1,60 @@
+name: Deploy to Cloud Run
+
+# Auto-deploy on green main. Runs only when the GCP secrets are configured (see DEPLOY.md),
+# so forks/unconfigured repos skip it cleanly.
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    if: ${{ github.repository_owner != '' && vars.DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write        # for Workload Identity Federation (keyless auth)
+    env:
+      PROJECT: ${{ secrets.GCP_PROJECT }}
+      REGION: ${{ secrets.GCP_REGION }}
+      SERVICE: seo-agent
+      REPO: seo-agent
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Ensure Artifact Registry repo exists
+        run: |
+          gcloud artifacts repositories describe "$REPO" --location "$REGION" \
+            || gcloud artifacts repositories create "$REPO" \
+                 --repository-format=docker --location "$REGION"
+
+      - name: Build & push image (Cloud Build)
+        run: |
+          IMAGE="$REGION-docker.pkg.dev/$PROJECT/$REPO/app:${{ github.sha }}"
+          gcloud builds submit --tag "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --image "$IMAGE" \
+            --region "$REGION" \
+            --platform managed \
+            --allow-unauthenticated \
+            --memory 2Gi --cpu 2 \
+            --concurrency 4 \
+            --timeout 900 \
+            --min-instances 0 --max-instances 3 \
+            --set-secrets "OPENAI_API_KEY=openai-api-key:latest" \
+            --set-env-vars "SEO_LLM_PROVIDER=openai,SEO_WORKER_MODEL=openai/gpt-4o-mini,SEO_ROUTER_MODEL=openai/gpt-4o-mini,SEO_SYNTH_MODEL=openai/gpt-4o-mini,SEO_COLLECTORS_MODE=sequential"
+
+      - name: Show URL
+        run: gcloud run services describe "$SERVICE" --region "$REGION" --format 'value(status.url)'

@@ -16,6 +16,7 @@ The React dev server (vite, :5173) proxies /api -> here, so there are no CORS is
 from __future__ import annotations
 
 import json
+import os
 import uuid
 
 from fastapi import FastAPI, HTTPException
@@ -138,3 +139,12 @@ async def get_state(session_id: str) -> dict:
         "site_type": st.get("site_type"),
         "publish_approved": bool(st.get("publish_approved")),
     }
+
+
+# Serve the built React app from the same container (single-container deploy). The /api/*
+# routes above are matched first; this catch-all serves the SPA + its assets.
+_DIST = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
+if os.path.isdir(_DIST):
+    from fastapi.staticfiles import StaticFiles
+
+    api.mount("/", StaticFiles(directory=_DIST, html=True), name="ui")

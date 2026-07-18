@@ -1,0 +1,27 @@
+# Keep the build context small and reproducible.
+.git
+.github
+.venv
+**/__pycache__
+**/*.pyc
+.ruff_cache
+.pytest_cache
+
+# Node / build artifacts (frontend is rebuilt inside the image)
+frontend/node_modules
+frontend/dist
+
+# Secrets & local state (never bake into the image)
+app/.env
+.env
+.site_repos
+seo_changes
+eval/results
+seo_data_mcp/seo_index.db*
+app/knowledge_base/vector_store
+
+# Docs / misc
+*.md
+!README.md
+tests
+.google-agents-cli
